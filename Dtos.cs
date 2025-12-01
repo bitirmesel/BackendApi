@@ -1,35 +1,16 @@
-// Dtos.cs
+namespace DktApi;
 
-// Login sırasında DB'den çekeceğimiz basit user modeli
-public record DbUser(
-    long   Id,
-    string Name,
-    string Email,
-    string Password
-);
+public record AddNoteRequest(string Text);
+public record AddBadgeRequest(string Title, string Icon);
+public record CreateTaskRequest(int StudentId, string Title, string Date, string Status);
 
-// Oyun oturumu oluşturma isteği
-public record CreateGameSessionReq(
-    long  PlayerId,      // players.id
-    long  GameId,        // games.id
-    long  LetterId,      // letters.id
-    long? AssetSetId,    // asset_sets.id (opsiyonel)
-    long? TaskId,        // tasks.id (opsiyonel)
-    int?  MaxScore       // maksimum skor (ör. 100)
-);
+public record LoginRequestDto(string Email, string Password);
+public record LoginResponseDto(string Token, int TherapistId, string Name);
 
-// Login isteği
-public record LoginRequest(
-    string Role,      // "player" | "therapist"
-    string Email,
-    string Password
-);
-
-// Login cevabı
-public record LoginResponse(
-    string Token,
-    string Role,
-    long   UserId,
-    string Name,
-    string Email
+public record StudentStatsDto(
+    int ProgressPercentage,
+    int CompletedTasks,
+    int BadgeCount,
+    List<int> WeeklyProgress,
+    Dictionary<string, double> Skills
 );
