@@ -2,7 +2,6 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using DktApi.Models.Db;
-using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 
 namespace DktApi;
@@ -16,27 +15,30 @@ public class JwtHelper
         _config = config;
     }
 
-    public string GenerateToken(DbUser user)
+    // Artık DbUser değil, Therapist alıyor
+    public string GenerateToken(Therapist therapist)
     {
-        var jwtSection = _config.GetSection("Jwt");
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSection["Key"]!));
+        var claims = new List<Claim>
+        {
+            new Claim(JwtRegisteredClaimNames.Sub, therapist.Email ?? string.Empty),
+            new Claim("therapistId", therapist.Id.ToString()),
+            new Claim(ClaimTypes.Name, therapist.Name ?? string.Empty),
+            new Claim(ClaimTypes.Role, "therapist")
+        };
+
+        var key = new SymmetricSecurityKey(
+            Encoding.UTF8.GetBytes(_config["Jwt:Key"]!)
+        );
 
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-        var claims = new List<Claim>
-        {
-            new(JwtRegisteredClaimNames.Sub, user.Email),
-            new("userId", user.Id.ToString()),
-            new("role", user.Role),
-            new("therapistId", user.TherapistId?.ToString() ?? "")
-        };
-
         var token = new JwtSecurityToken(
-            issuer: jwtSection["Issuer"],
-            audience: jwtSection["Audience"],
+            issuer: _config["Jwt:Issuer"],
+            audience: _config["Jwt:Audience"],
             claims: claims,
-            expires: DateTime.UtcNow.AddDays(7),
-            signingCredentials: creds);
+            expires: DateTime.UtcNow.AddHours(12),
+            signingCredentials: creds
+        );
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }

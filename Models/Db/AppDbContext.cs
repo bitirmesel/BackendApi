@@ -12,7 +12,6 @@ public class AppDbContext : DbContext
     public DbSet<Therapist> Therapists => Set<Therapist>();
     public DbSet<TaskItem> TaskItems => Set<TaskItem>();
     public DbSet<GameSession> GameSessions => Set<GameSession>();
-    public DbSet<DbUser> DbUsers => Set<DbUser>();
     public DbSet<Game> Games => Set<Game>();
     public DbSet<Letter> Letters => Set<Letter>();
     public DbSet<AssetSet> AssetSets => Set<AssetSet>();
@@ -24,11 +23,6 @@ public class AppDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
-
-        modelBuilder.Entity<Player>()
-            .HasOne(p => p.Advisor)
-            .WithMany(t => t.Players)
-            .HasForeignKey(p => p.AdvisorId);
 
         modelBuilder.Entity<TaskItem>()
             .HasOne(t => t.Player)
@@ -45,9 +39,5 @@ public class AppDbContext : DbContext
             .WithMany(p => p.Badges)
             .HasForeignKey(b => b.PlayerId);
 
-        modelBuilder.Entity<DbUser>()
-            .HasOne(u => u.Therapist)
-            .WithMany()
-            .HasForeignKey(u => u.TherapistId);
     }
 }

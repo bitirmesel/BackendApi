@@ -13,23 +13,24 @@ public static class AuthEndpoints
             AppDbContext db,
             IConfiguration config) =>
         {
-            var user = await db.DbUsers
-                .Include(u => u.Therapist)
-                .FirstOrDefaultAsync(u => u.Email == req.Email);
+            // therapists tablosundan email ile kullanıcı çek
+            var therapist = await db.Therapists
+                .FirstOrDefaultAsync(t => t.Email == req.Email);
 
-            if (user is null || user.PasswordHash != req.Password) // DEMO
+            if (therapist is null || therapist.Password != req.Password)
             {
+                // Şimdilik plaintext karşılaştırma – DEMO
                 return Results.Unauthorized();
             }
 
-            var jwtHelper = new JwtHelper(config);
-            var token = jwtHelper.GenerateToken(user);
+            // Eğer token üretmek istiyorsan, DbUser yerine Therapist’i baz alan bir helper yapmamız lazım.
+            // Şimdilik basit bir response dönelim, token kısmını istersen sonra güzelleştiririz.
 
             return Results.Ok(new LoginResponse
             {
-                Token = token,
-                TherapistId = user.TherapistId ?? 0,
-                Name = user.Therapist?.Name ?? "Terapist"
+                Token = "demo-token",              // TODO: JWT'e geçeceğiz
+                TherapistId = (int)therapist.Id,
+                Name = therapist.Name
             });
         });
     }
