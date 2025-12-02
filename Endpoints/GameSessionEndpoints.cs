@@ -41,8 +41,8 @@ public static class GameSessionEndpoints
             var player = await db.Players.FindAsync(session.PlayerId);
             if (player is not null)
             {
-                player.Score += req.Score;
-                player.LastActive = DateTime.UtcNow;
+                player.TotalScore += req.Score;
+                player.LastLogin = DateTime.UtcNow;
             }
 
             await db.SaveChangesAsync();

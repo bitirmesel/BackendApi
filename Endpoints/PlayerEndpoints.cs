@@ -1,4 +1,6 @@
 using DktApi.Models.Db;
+using DktApi.Dtos.Player; // CreateStudentRequest burada
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace DktApi.Endpoints;
@@ -7,108 +9,120 @@ public static class PlayerEndpoints
 {
     public static void MapPlayerEndpoints(this WebApplication app)
     {
-        // Liste – StudentsScreen: GET http://.../api/students
-        app.MapGet("/api/students", async (AppDbContext db) =>
+        // ----------------------------------------------------
+        // 1) Öğrenci Listesi
+        // GET /api/students?therapistId=1
+        // ----------------------------------------------------
+        app.MapGet("/api/students", async ([FromQuery] long therapistId, AppDbContext db) =>
         {
-            var players = await db.Players
-                .Include(p => p.Tasks)
-                .ToListAsync();
+            // Bu terapiste bağlı öğrencileri therapist_clients üzerinden alıyoruz
+            var playersQuery = db.TherapistClients
+                .Where(tc => tc.TherapistId == therapistId)
+                .Include(tc => tc.Player)
+                    .ThenInclude(p => p.Tasks);
 
-            var result = players.Select(p => new
+            var list = await playersQuery.ToListAsync();
+
+            var result = list.Select(tc =>
             {
-                id = p.Id,
-                advisorId = p.AdvisorId,
-                name = p.Name,
-                age = p.Age,
-                level = p.Level,
-                score = p.Score,
-                lastActive = p.LastActive.ToString("O"), // ISO 8601
-                activeTasks = p.Tasks.Count(t => t.Status != "Tamamlandı")
+                var p = tc.Player;
+
+                var activeTasksCount = p.Tasks.Count(t => t.Status != "COMPLETED");
+
+                return new
+                {
+                    id = p.Id,
+                    name = p.Name,
+                    score = p.TotalScore ?? 0,
+                    lastActive = p.LastLogin,          // ISO'ya serialize edilir
+                    activeTasks = activeTasksCount,
+                    therapistId = therapistId,         // backend kullanımı için
+                    advisorId = therapistId            // Flutter'ın beklediği isim
+                };
             });
 
             return Results.Ok(result);
-        });
+        })
+        .WithTags("Students")
+        .WithName("GetStudents");
 
-        // Öğrenci oluştur – StudentsScreen add dialog: POST /api/students
-        app.MapPost("/api/students", async (AppDbContext db, Player player) =>
+        // ----------------------------------------------------
+        // 2) Yeni Öğrenci Oluştur
+        // POST /api/students
+        // Body: CreateStudentRequest
+        // ----------------------------------------------------
+        app.MapPost("/api/students", async ([FromBody] CreateStudentRequest req, AppDbContext db) =>
         {
-            player.LastActive = DateTime.UtcNow;
+            // Terapist var mı kontrol et
+            var therapist = await db.Therapists.FindAsync(req.TherapistId);
+            if (therapist is null)
+            {
+                return Results.BadRequest("Therapist not found.");
+            }
+
+            var now = DateTime.UtcNow;
+
+            // Player kaydı
+            var player = new Player
+            {
+                Name = req.Name,
+                Nickname = string.IsNullOrWhiteSpace(req.Nickname) ? req.Name : req.Nickname,
+                Email = req.Email,
+                Password = req.Password,
+                BirthDate = req.BirthDate,
+                Gender = req.Gender,
+                Diagnosis = req.Diagnosis,
+                ParentName = req.ParentName,
+                ParentPhone = req.ParentPhone,
+                City = req.City,
+                SchoolName = req.SchoolName,
+                Abouts = req.Abouts,
+                CreatedAt = now,
+                UpdatedAt = now,
+                LastLogin = now,
+                TotalScore = 0
+            };
+
             db.Players.Add(player);
             await db.SaveChangesAsync();
-            return Results.Created($"/api/students/{player.Id}", player);
-        });
 
-        // Öğrenci detay – gerekirse
-        app.MapGet("/api/students/{id:int}", async (int id, AppDbContext db) =>
-        {
-            var p = await db.Players.FindAsync(id);
-            if (p is null) return Results.NotFound();
-            return Results.Ok(p);
-        });
-
-        // NOTLAR
-        app.MapGet("/api/students/{id:int}/notes", async (int id, AppDbContext db) =>
-        {
-            var notes = await db.Notes
-                .Where(n => n.PlayerId == id)
-                .OrderByDescending(n => n.Id)
-                .Select(n => new
-                {
-                    date = n.Date,
-                    text = n.Text
-                })
-                .ToListAsync();
-
-            return Results.Ok(notes);
-        });
-
-        app.MapPost("/api/students/{id:int}/notes", async (int id, AddNoteRequest req, AppDbContext db) =>
-        {
-            var player = await db.Players.FindAsync(id);
-            if (player is null) return Results.NotFound();
-
-            var note = new Note
+            // Therapist-Player ilişki kaydı (therapist_clients)
+            var link = new TherapistClient
             {
-                PlayerId = id,
-                Text = req.Text,
-                Date = DateTime.Now.ToString("dd.MM.yyyy HH:mm")
+                TherapistId = req.TherapistId,
+                PlayerId = player.Id
             };
 
-            db.Notes.Add(note);
+            db.TherapistClients.Add(link);
             await db.SaveChangesAsync();
-            return Results.Ok();
-        });
 
-        // ROZETLER
-        app.MapGet("/api/students/{id:int}/badges", async (int id, AppDbContext db) =>
-        {
-            var badges = await db.Badges
-                .Where(b => b.PlayerId == id)
-                .OrderByDescending(b => b.CreatedAt)
-                .Select(b => new
-                {
-                    title = b.Title,
-                    icon = b.Icon
-                })
-                .ToListAsync();
+            // Frontend için dönen minimal response
+            var response = new
+            {
+                id = player.Id,
+                name = player.Name,
+                therapistId = req.TherapistId,
+                advisorId = req.TherapistId
+            };
 
-            return Results.Ok(badges);
-        });
+            return Results.Created($"/api/students/{player.Id}", response);
+        })
+        .WithTags("Students")
+        .WithName("CreateStudent");
 
-        app.MapPost("/api/students/{id:int}/badges", async (int id, AddBadgeRequest req, AppDbContext db) =>
+        // ----------------------------------------------------
+        // 3) Öğrenci Detay
+        // GET /api/students/{id}
+        // ----------------------------------------------------
+        app.MapGet("/api/students/{id:long}", async (long id, AppDbContext db) =>
         {
             var player = await db.Players.FindAsync(id);
-            if (player is null) return Results.NotFound();
+            if (player is null)
+                return Results.NotFound();
 
-            var badge = new Badge
-            {
-                PlayerId = id,
-                Title = req.Title,
-                Icon = req.Icon
-            };
-            db.Badges.Add(badge);
-            await db.SaveChangesAsync();
-            return Results.Ok();
-        });
+            return Results.Ok(player);
+        })
+        .WithTags("Students")
+        .WithName("GetStudentDetail");
     }
 }

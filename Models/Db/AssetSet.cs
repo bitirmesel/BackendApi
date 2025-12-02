@@ -1,13 +1,31 @@
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace DktApi.Models.Db;
 
+[Table("asset_sets")]
 public class AssetSet
 {
-    public int Id { get; set; }
+    [Key]
+    [Column("id")]
+    public long Id { get; set; }
 
-    public string Name { get; set; } = string.Empty;
-    public string Letter { get; set; } = string.Empty; // A, B, C...
-    public string GameCode { get; set; } = string.Empty;
+    [Column("game_id")]
+    public long GameId { get; set; }
 
-    // JSON içeriği (kelimeler, cümleler vs.)
-    public string JsonContent { get; set; } = "{}";
+    [Column("letter_id")]
+    public long LetterId { get; set; }
+
+    [Column("asset_json")]
+    public string AssetJson { get; set; } = string.Empty; // JSON veya path
+
+    [Column("created_at")]
+    public DateTime? CreatedAt { get; set; }
+
+    public Game Game { get; set; } = null!;
+    public Letter Letter { get; set; } = null!;
+
+    public ICollection<TaskItem> Tasks { get; set; } = new List<TaskItem>();
+    public ICollection<GameSession> GameSessions { get; set; } = new List<GameSession>();
 }
+

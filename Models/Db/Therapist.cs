@@ -17,7 +17,7 @@ public class Therapist
     public string Email { get; set; } = string.Empty;
 
     [Column("password")]
-    public string Password { get; set; } = string.Empty; // login için
+    public string Password { get; set; } = string.Empty;
 
     [Column("phone_number")]
     public string? PhoneNumber { get; set; }
@@ -40,6 +40,7 @@ public class Therapist
     [Column("updated_at")]
     public DateTime? UpdatedAt { get; set; }
 
-    // İleride ilişki kurarsan açarsın:
-    // public ICollection<Player> Players { get; set; } = new List<Player>();
+    public ICollection<TherapistClient> TherapistClients { get; set; } = new List<TherapistClient>();
+    public ICollection<TaskItem> Tasks { get; set; } = new List<TaskItem>();
+    public ICollection<Feedback> Feedbacks { get; set; } = new List<Feedback>();
 }

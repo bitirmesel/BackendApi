@@ -69,7 +69,7 @@ app.UseAuthorization();
 app.MapAuthEndpoints();
 app.MapTherapistEndpoints();
 app.MapPlayerEndpoints();
-app.MapTaskEndpoints();
+//app.MapTaskEndpoints();
 app.MapGameSessionEndpoints();
 app.MapLookupEndpoints();
 app.MapDashboardEndpoints();

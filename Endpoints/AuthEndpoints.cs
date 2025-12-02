@@ -1,6 +1,8 @@
 using DktApi.Models.Auth;
 using DktApi.Models.Db;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 
 namespace DktApi.Endpoints;
 
@@ -8,30 +10,72 @@ public static class AuthEndpoints
 {
     public static void MapAuthEndpoints(this WebApplication app)
     {
+        // ----------------------------------------------------
+        // POST /api/auth/login (Giriş)
+        // ----------------------------------------------------
         app.MapPost("/api/auth/login", async (
-            LoginRequest req,
-            AppDbContext db,
-            IConfiguration config) =>
+            [FromBody] LoginRequest req,
+            AppDbContext db) =>
         {
-            // therapists tablosundan email ile kullanıcı çek
+            // E-posta ile terapisti bul
             var therapist = await db.Therapists
                 .FirstOrDefaultAsync(t => t.Email == req.Email);
 
+            // Kullanıcı yoksa veya şifre yanlışsa (Şimdilik plaintext karşılaştırma)
             if (therapist is null || therapist.Password != req.Password)
             {
-                // Şimdilik plaintext karşılaştırma – DEMO
                 return Results.Unauthorized();
             }
+            
+            // Eğer isterseniz burada "last_login" tarihini de güncelleyebilirsiniz.
 
-            // Eğer token üretmek istiyorsan, DbUser yerine Therapist’i baz alan bir helper yapmamız lazım.
-            // Şimdilik basit bir response dönelim, token kısmını istersen sonra güzelleştiririz.
-
-            return Results.Ok(new LoginResponse
+            return Results.Ok(new AuthResponse
             {
-                Token = "demo-token",              // TODO: JWT'e geçeceğiz
-                TherapistId = (int)therapist.Id,
+                Token = "demo-token", // TODO: JWT'ye geçiş yapılacak
+                TherapistId = therapist.Id,
                 Name = therapist.Name
             });
-        });
+        }).WithTags("Auth").WithName("Login");
+
+        // ----------------------------------------------------
+        // POST /api/auth/register (Kayıt)
+        // ----------------------------------------------------
+        app.MapPost("/api/auth/register", async (
+            [FromBody] RegisterRequest req,
+            AppDbContext db) =>
+        {
+            // 1. E-posta Kontrolü
+            var existingTherapist = await db.Therapists
+                .AnyAsync(t => t.Email == req.Email);
+
+            if (existingTherapist)
+            {
+                return Results.BadRequest(new { message = "Bu e-posta adresi zaten kayıtlıdır." });
+            }
+
+            // 2. Yeni Terapist Objelerinin Oluşturulması
+            var newTherapist = new Therapist
+            {
+                Name = req.Name,
+                Email = req.Email,
+                // TODO: Gerçek uygulamada şifre HASH'lenmelidir (örn: Argon2, BCrypt)
+                Password = req.Password,
+                ClinicName = req.ClinicName,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            // 3. Veritabanına Ekleme
+            db.Therapists.Add(newTherapist);
+            await db.SaveChangesAsync();
+            
+            // 4. Başarılı Yanıt (Flutter'ın beklediği token ve id yapısı)
+            return Results.Ok(new AuthResponse
+            {
+                Token = "demo-token", // TODO: JWT'ye geçiş yapılacak
+                TherapistId = newTherapist.Id,
+                Name = newTherapist.Name
+            });
+        }).WithTags("Auth").WithName("Register");
     }
 }

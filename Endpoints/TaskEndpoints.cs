@@ -1,4 +1,5 @@
 using DktApi.Models.Db;
+using DktApi.Dtos.Tasks;
 using Microsoft.EntityFrameworkCore;
 
 namespace DktApi.Endpoints;
@@ -7,56 +8,129 @@ public static class TaskEndpoints
 {
     public static void MapTaskEndpoints(this WebApplication app)
     {
-        // Bir öğrencinin görevlerini listele – GET /api/tasks/{studentId}
-        app.MapGet("/api/tasks/{studentId:int}", async (int studentId, AppDbContext db) =>
+        // ----------------------------------------------------
+        // 1) GÖREV ATA – POST /api/tasks
+        // ----------------------------------------------------
+        app.MapPost("/api/tasks", async (AssignTaskRequest req, AppDbContext db) =>
         {
-            var tasks = await db.TaskItems
-                .Where(t => t.PlayerId == studentId)
-                .OrderByDescending(t => t.Id)
-                .Select(t => new
-                {
-                    id = t.Id,
-                    title = t.Title,
-                    date = t.Date,
-                    status = t.Status
-                })
-                .ToListAsync();
+            // İsteğe bağlı: Therapist & Player var mı kontrolü
+            var therapistExists = await db.Therapists.AnyAsync(t => t.Id == req.TherapistId);
+            if (!therapistExists)
+                return Results.BadRequest("Therapist not found");
 
-            return Results.Ok(tasks);
-        });
-
-        // Yeni görev oluştur – StudentsDetailScreen POST /api/tasks
-        app.MapPost("/api/tasks", async (CreateTaskRequest req, AppDbContext db) =>
-        {
-            var player = await db.Players.FindAsync(req.StudentId);
-            if (player is null) return Results.BadRequest("Öğrenci bulunamadı");
+            var playerExists = await db.Players.AnyAsync(p => p.Id == req.PlayerId);
+            if (!playerExists)
+                return Results.BadRequest("Player not found");
 
             var task = new TaskItem
             {
-                PlayerId = req.StudentId,
-                Title = req.Title,
-                Date = req.Date,
-                Status = req.Status
+                TherapistId = req.TherapistId,
+                PlayerId = req.PlayerId,
+                GameId = req.GameId,
+                LetterId = req.LetterId,
+                AssetSetId = req.AssetSetId,
+                Status = "ASSIGNED",
+                AssignedAt = DateTime.UtcNow,
+                DueAt = req.DueAt,
+                Note = req.Note
             };
 
             db.TaskItems.Add(task);
             await db.SaveChangesAsync();
 
-            return Results.Created($"/api/tasks/{task.Id}", task);
+            return Results.Created($"/api/tasks/{task.Id}", new { task.Id });
         });
 
-        // Görev güncelle (durum değiştirme vb.) – isteğe bağlı
-        app.MapPut("/api/tasks/{id:int}", async (int id, CreateTaskRequest req, AppDbContext db) =>
+        // ----------------------------------------------------
+        // 2) TERAPİSTİN GÖREV LİSTESİ – GET /api/therapists/{id}/tasks
+        // (İster ayrı liste ekranında, ister öğrenci detayında kullanılabilir)
+        // ----------------------------------------------------
+        app.MapGet("/api/therapists/{therapistId:long}/tasks",
+            async (long therapistId, AppDbContext db) =>
         {
-            var task = await db.TaskItems.FindAsync(id);
-            if (task is null) return Results.NotFound();
+            var tasks = await db.TaskItems
+                .Include(t => t.Player)
+                .Include(t => t.Game)
+                .Include(t => t.Letter)
+                .Where(t => t.TherapistId == therapistId)
+                .OrderByDescending(t => t.AssignedAt)
+                .ToListAsync();
 
-            task.Title = req.Title;
-            task.Status = req.Status;
-            task.Date = req.Date;
+            var result = tasks.Select(t => new
+            {
+                id = t.Id,
+                studentId = t.PlayerId,
+                studentName = t.Player?.Name,
+                gameId = t.GameId,
+                gameName = t.Game?.Name,
+                letterId = t.LetterId,
+                letterCode = t.Letter?.Code,
+                status = t.Status,
+                assignedAt = t.AssignedAt,
+                dueAt = t.DueAt,
+                note = t.Note
+            });
 
-            await db.SaveChangesAsync();
-            return Results.Ok(task);
+            return Results.Ok(result);
         });
+
+        // ----------------------------------------------------
+        // 3) GÖREVLERDEN BİLDİRİM ÜRET – GET /api/therapists/{id}/notifications
+        // TasksScreen burayı kullanıyor
+        // ----------------------------------------------------
+        app.MapGet("/api/therapists/{therapistId:long}/notifications",
+            async (long therapistId, AppDbContext db) =>
+            {
+                var tasks = await db.TaskItems
+                    .Include(t => t.Player)
+                    .Where(t => t.TherapistId == therapistId)
+                    .OrderByDescending(t => t.AssignedAt)
+                    .Take(50)
+                    .ToListAsync();
+
+                var now = DateTime.UtcNow;
+
+                var notifications = tasks.Select(t =>
+                {
+                    string type = t.Status switch
+                    {
+                        "COMPLETED" => "success",
+                        "ASSIGNED"  => "info",
+                        "OVERDUE"   => "warning",
+                        _           => "info"
+                    };
+
+                    string title = t.Status switch
+                    {
+                        "COMPLETED" => "Görev Tamamlandı",
+                        "ASSIGNED"  => "Yeni Görev Atandı",
+                        "OVERDUE"   => "Geciken Görev",
+                        _           => "Görev Güncellendi"
+                    };
+
+                    var studentName = t.Player?.Name ?? "Öğrenci";
+
+                    string message = t.Status switch
+                    {
+                        "COMPLETED" => $"{studentName} atanmış görevi tamamladı.",
+                        "ASSIGNED"  => $"{studentName} için yeni bir görev atandı.",
+                        "OVERDUE"   => $"{studentName} için görev süresi dolmak üzere.",
+                        _           => $"{studentName} görevi güncellendi."
+                    };
+
+                    var time = (t.AssignedAt ?? now).ToLocalTime().ToString("g");
+
+                    return new NotificationDto
+                    {
+                        Title = title,
+                        Message = message,
+                        Time = time,
+                        Type = type,
+                        Unread = true
+                    };
+                }).ToList();
+
+                return Results.Ok(notifications);
+            });
     }
 }
