@@ -1,28 +1,38 @@
 using DktApi.Models.Db;
 using Microsoft.EntityFrameworkCore;
+using System.Linq; 
+using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Builder; // WebApplication için gerekebilir
+using Microsoft.AspNetCore.Routing; // IEndpointRouteBuilder için gerekebilir
 
 namespace DktApi.Endpoints;
 
 public static class DashboardEndpoints
 {
-    public static void MapDashboardEndpoints(this WebApplication app)
+    public static void MapDashboardEndpoints(this WebApplication app) // WebApplication tipini kullanıyoruz
     {
         // --------------------------------------------------
         // 1) ANA DASHBOARD ÖZETİ
-        // YENİ TANIM: GET /api/dashboard/summary/{therapistId}
-        // therapistId'yi route parametresi olarak alıyoruz.
+        // URL: GET /api/dashboard/summary?therapistId=...
+        // therapistId'yi Query String olarak alıyoruz (Flutter Frontend ile Uyumlu).
         // --------------------------------------------------
-        app.MapGet("/api/dashboard/summary/{therapistId:long}", async (long therapistId, AppDbContext db) =>
+        app.MapGet("/api/dashboard/summary", async (long? therapistId, AppDbContext db) =>
         {
+            // Query String'den gelen ID'nin kontrolü
+            if (therapistId is null)
+                return Results.BadRequest("TherapistId gereklidir.");
+            
+            var id = therapistId.Value;
+
             var therapist = await db.Therapists
-                .FirstOrDefaultAsync(t => t.Id == therapistId);
+                .FirstOrDefaultAsync(t => t.Id == id);
 
             if (therapist is null)
                 return Results.NotFound("Therapist not found");
 
             // Bu terapistin toplam öğrencisi
             var totalStudents = await db.TherapistClients
-                .Where(tc => tc.TherapistId == therapistId)
+                .Where(tc => tc.TherapistId == id)
                 .Select(tc => tc.PlayerId)
                 .Distinct()
                 .CountAsync();
@@ -35,7 +45,7 @@ public static class DashboardEndpoints
                 .Include(gs => gs.Task)
                 .Where(gs =>
                     gs.Task != null &&
-                    gs.Task!.TherapistId == therapistId &&
+                    gs.Task!.TherapistId == id &&
                     gs.FinishedAt != null &&
                     gs.FinishedAt >= weekAgo)
                 .ToListAsync();
@@ -48,7 +58,7 @@ public static class DashboardEndpoints
                 .Include(gs => gs.Feedbacks)
                 .Where(gs =>
                     gs.Task != null &&
-                    gs.Task!.TherapistId == therapistId &&
+                    gs.Task!.TherapistId == id &&
                     gs.FinishedAt != null &&
                     gs.Feedbacks.Count == 0) // Feedback listesi boş olanlar
                 .CountAsync();
@@ -68,7 +78,7 @@ public static class DashboardEndpoints
                 .Include(gs => gs.Task)
                 .Where(gs =>
                     gs.Task != null &&
-                    gs.Task!.TherapistId == therapistId &&
+                    gs.Task!.TherapistId == id &&
                     gs.FinishedAt != null &&
                     gs.FinishedAt >= weekStart)
                 .ToListAsync();
@@ -82,12 +92,13 @@ public static class DashboardEndpoints
 
                     return new
                     {
-                        day = dayDate.ToString("ddd"), // örn: Mon, Tue
+                        day = dayDate.ToString("ddd"), // örn: Mon, Tue (Haftanın gün kısaltması)
                         count
                     };
                 })
                 .ToList();
 
+            // DTO olarak döndürülecek anonim nesne
             var dto = new
             {
                 advisorName = therapist.Name,
@@ -102,9 +113,8 @@ public static class DashboardEndpoints
         }).WithTags("Dashboard").WithName("GetDashboardSummary");
 
         // --------------------------------------------------
-        // 2) ÖĞRENCİ DETAY İSTATİSTİKLERİ
+        // 2) ÖĞRENCİ DETAY İSTATİSTİKLERİ (Önceki Tanım Korundu)
         // GET /api/students/{id}/stats?therapistId=1
-        // (Burayı değiştirmedik, çünkü Flutter'dan ilgili çağrıyı görmedik)
         // --------------------------------------------------
         app.MapGet("/api/students/{id:long}/stats", async (long id, long therapistId, AppDbContext db) =>
         {
