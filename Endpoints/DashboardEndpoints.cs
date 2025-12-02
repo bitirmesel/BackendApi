@@ -9,9 +9,10 @@ public static class DashboardEndpoints
     {
         // --------------------------------------------------
         // 1) ANA DASHBOARD ÖZETİ
-        // GET /api/dashboard/summary?therapistId=1
+        // YENİ TANIM: GET /api/dashboard/summary/{therapistId}
+        // therapistId'yi route parametresi olarak alıyoruz.
         // --------------------------------------------------
-        app.MapGet("/api/dashboard/summary", async (long therapistId, AppDbContext db) =>
+        app.MapGet("/api/dashboard/summary/{therapistId:long}", async (long therapistId, AppDbContext db) =>
         {
             var therapist = await db.Therapists
                 .FirstOrDefaultAsync(t => t.Id == therapistId);
@@ -49,7 +50,7 @@ public static class DashboardEndpoints
                     gs.Task != null &&
                     gs.Task!.TherapistId == therapistId &&
                     gs.FinishedAt != null &&
-                    !gs.Feedbacks.Any(f => f.TherapistId == therapistId))
+                    gs.Feedbacks.Count == 0) // Feedback listesi boş olanlar
                 .CountAsync();
 
             // Başarı oranı: score / max_score ortalaması
@@ -98,11 +99,12 @@ public static class DashboardEndpoints
             };
 
             return Results.Ok(dto);
-        });
+        }).WithTags("Dashboard").WithName("GetDashboardSummary");
 
         // --------------------------------------------------
         // 2) ÖĞRENCİ DETAY İSTATİSTİKLERİ
         // GET /api/students/{id}/stats?therapistId=1
+        // (Burayı değiştirmedik, çünkü Flutter'dan ilgili çağrıyı görmedik)
         // --------------------------------------------------
         app.MapGet("/api/students/{id:long}/stats", async (long id, long therapistId, AppDbContext db) =>
         {
@@ -138,8 +140,7 @@ public static class DashboardEndpoints
             };
 
             return Results.Ok(dto);
-        });
+        }).WithTags("Students").WithName("GetStudentStats");
 
-        
     }
 }
