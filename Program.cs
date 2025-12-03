@@ -112,11 +112,10 @@ using (var scope = app.Services.CreateScope())
 
 // Swagger'ı Development dışında da görmek istersen if bloğunu kaldırabilirsin.
 // Şimdilik sadece geliştirmede açık kalsın.
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+
+app.UseSwagger();
+app.UseSwaggerUI();
+
 
 app.UseAuthentication();
 app.UseAuthorization();
