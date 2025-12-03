@@ -29,3 +29,5 @@ public class AssetSet
     public ICollection<GameSession> GameSessions { get; set; } = new List<GameSession>();
 }
 
+
+
