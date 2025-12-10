@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("DktApi")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+936204d640744200de5e707701c8ec82efa46150")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+0d97686f99ee71a5b54b5a89c0eb194ce9267d6a")]
 [assembly: System.Reflection.AssemblyProductAttribute("DktApi")]
 [assembly: System.Reflection.AssemblyTitleAttribute("DktApi")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

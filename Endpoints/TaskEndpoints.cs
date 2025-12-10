@@ -163,5 +163,35 @@ public static class TaskEndpoints
             })
             .WithTags("Tasks")
             .WithName("GetPlayerActiveTasks");
+
+            // 4) PLAYER İÇİN TÜM ATANMIŞ GÖREVLER — GET /api/players/{playerId}/tasks
+app.MapGet("/api/players/{playerId:long}/tasks",
+    async (long playerId, AppDbContext db) =>
+{
+    var tasks = await db.TaskItems
+        .Where(t => t.PlayerId == playerId)
+        .Include(t => t.Game)
+        .Include(t => t.Letter)
+        .OrderByDescending(t => t.AssignedAt)
+        .Select(t => new 
+        {
+            taskId = t.Id,
+            gameId = t.GameId,
+            gameName = t.Game!.Name,
+            letterId = t.LetterId,
+            letterCode = t.Letter!.Code,
+            note = t.Note,
+            status = t.Status,
+            assignedAt = t.AssignedAt,
+            dueAt = t.DueAt
+        })
+        .ToListAsync();
+
+    return Results.Ok(tasks);
+})
+.WithTags("Tasks")
+.WithName("GetAllPlayerTasks");
+
+
     }
 }
