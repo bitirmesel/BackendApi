@@ -85,3 +85,5 @@ C:\Users\PC\BackendApi\obj\Debug\net8.0\refint\DktApi.dll
 C:\Users\PC\BackendApi\obj\Debug\net8.0\DktApi.pdb
 C:\Users\PC\BackendApi\obj\Debug\net8.0\DktApi.genruntimeconfig.cache
 C:\Users\PC\BackendApi\obj\Debug\net8.0\ref\DktApi.dll
+C:\Users\PC\BackendApi\bin\Debug\net8.0\CloudinaryDotNet.dll
+C:\Users\PC\BackendApi\bin\Debug\net8.0\Newtonsoft.Json.dll

@@ -40,5 +40,40 @@ public static class AssetEndpoints
             return Results.Ok(new { message = "Yeni asset seti OLUŞTURULDU.", id = newAssetSet.Id });
         })
         .WithTags("Assets"); // Swagger'da "Assets" başlığı altında görünsün
+
+        // GET /api/tasks/{taskId}/asset-set
+        app.MapGet("/api/tasks/{taskId:long}/asset-set", async (long taskId, AppDbContext db) =>
+        {
+            var task = await db.TaskItems
+                .Include(t => t.AssetSet)
+                .FirstOrDefaultAsync(t => t.Id == taskId);
+
+            if (task is null)
+                return Results.NotFound("Task not found.");
+
+            AssetSet? assetSet = task.AssetSet;
+
+            // Eğer AssetSetId dolu değilse, game+letter üzerinden asset set bulmayı deneriz
+            if (assetSet is null)
+            {
+                assetSet = await db.AssetSets
+                    .FirstOrDefaultAsync(a => a.GameId == task.GameId && a.LetterId == task.LetterId);
+            }
+
+            if (assetSet is null)
+                return Results.NotFound("Asset set not found for this task.");
+
+            var response = new
+            {
+                assetSetId = assetSet.Id,
+                gameId = assetSet.GameId,
+                letterId = assetSet.LetterId,
+                json = assetSet.AssetJson
+            };
+
+            return Results.Ok(response);
+        })
+        .WithTags("Assets")
+        .WithName("GetAssetSetByTask");
     }
 }

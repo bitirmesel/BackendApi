@@ -43,9 +43,13 @@
         "net8.0": {
           "targetAlias": "net8.0",
           "dependencies": {
+            "CloudinaryDotNet": {
+              "target": "Package",
+              "version": "[1.27.0, )"
+            },
             "Dapper": {
               "target": "Package",
-              "version": "[2.1.66, )"
+              "version": "[2.1.35, )"
             },
             "Microsoft.AspNetCore.Authentication.JwtBearer": {
               "target": "Package",
@@ -53,11 +57,11 @@
             },
             "Npgsql": {
               "target": "Package",
-              "version": "[8.0.4, )"
+              "version": "[8.0.2, )"
             },
             "Npgsql.EntityFrameworkCore.PostgreSQL": {
               "target": "Package",
-              "version": "[8.0.4, )"
+              "version": "[8.0.2, )"
             },
             "Swashbuckle.AspNetCore": {
               "target": "Package",

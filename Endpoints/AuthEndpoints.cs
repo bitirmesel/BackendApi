@@ -10,9 +10,8 @@ public static class AuthEndpoints
 {
     public static void MapAuthEndpoints(this WebApplication app)
     {
-        // ----------------------------------------------------
         // POST /api/auth/login (Giriş)
-        // ----------------------------------------------------
+        
         app.MapPost("/api/auth/login", async (
             [FromBody] LoginRequest req,
             AppDbContext db) =>
@@ -37,9 +36,9 @@ public static class AuthEndpoints
             });
         }).WithTags("Auth").WithName("Login");
 
-        // ----------------------------------------------------
+        
         // POST /api/auth/register (Kayıt)
-        // ----------------------------------------------------
+        
         app.MapPost("/api/auth/register", async (
             [FromBody] RegisterRequest req,
             AppDbContext db) =>
@@ -77,5 +76,37 @@ public static class AuthEndpoints
                 Name = newTherapist.Name
             });
         }).WithTags("Auth").WithName("Register");
+
+        // PLAYER LOGIN – ÇOCUK UNITY İÇİN
+        // POST /api/player/auth/login
+        
+        app.MapPost("/api/player/auth/login", async (
+            [FromBody] PlayerLoginRequest req,
+            AppDbContext db) =>
+        {
+            var player = await db.Players
+                .FirstOrDefaultAsync(p => p.Nickname == req.Nickname);
+
+            if (player is null || player.Password != req.Password)
+            {
+                return Results.Unauthorized();
+            }
+
+            // İstersen burada LastLogin güncellemesi de yapabilirsin
+            player.LastLogin = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+
+            var resp = new PlayerLoginResponse
+            {
+                PlayerId = player.Id,
+                Nickname = player.Nickname,
+                TotalScore = player.TotalScore
+            };
+
+            return Results.Ok(resp);
+        })
+        .WithTags("Auth")
+        .WithName("PlayerLogin");
+
     }
 }
