@@ -1,6 +1,7 @@
 using Newtonsoft.Json;
-using DktApi.Dtos.Game;
+using DktApi.Dtos;
 using DktApi.Repositories;
+using DktApi.DTOs.Game;
 
 namespace DktApi.Services
 {

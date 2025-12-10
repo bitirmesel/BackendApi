@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Newtonsoft.Json; // Eğer yoksa: dotnet add package Newtonsoft.Json
 
-namespace DktApi.DTOs
+namespace DktApi.DTOs.Game
 {
     public class GameAssetConfigDto
     {
@@ -23,4 +23,5 @@ namespace DktApi.DTOs
         [JsonProperty("file")]
         public string File { get; set; }  // Örn: "kedi.png"
     }
+
 }

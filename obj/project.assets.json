@@ -4526,24 +4526,26 @@
     ]
   },
   "packageFolders": {
-    "C:\\Users\\PC\\.nuget\\packages\\": {}
+    "C:\\Users\\merye\\.nuget\\packages\\": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\PC\\BackendApi\\DktApi.csproj",
+      "projectUniqueName": "C:\\Users\\merye\\Belgeler\\GitHub\\BackendApi\\DktApi.csproj",
       "projectName": "DktApi",
-      "projectPath": "C:\\Users\\PC\\BackendApi\\DktApi.csproj",
-      "packagesPath": "C:\\Users\\PC\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\PC\\BackendApi\\obj\\",
+      "projectPath": "C:\\Users\\merye\\Belgeler\\GitHub\\BackendApi\\DktApi.csproj",
+      "packagesPath": "C:\\Users\\merye\\.nuget\\packages\\",
+      "outputPath": "C:\\Users\\merye\\Belgeler\\GitHub\\BackendApi\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
-        "C:\\Users\\PC\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        "C:\\Users\\merye\\AppData\\Roaming\\NuGet\\NuGet.Config",
+        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
       ],
       "originalTargetFrameworks": [
         "net8.0"
       ],
       "sources": {
+        "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
         "https://api.nuget.org/v3/index.json": {}
       },
       "frameworks": {
@@ -4615,7 +4617,7 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.413/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.416/PortableRuntimeIdentifierGraph.json"
       }
     }
   },
@@ -4624,7 +4626,7 @@
       "code": "NU1903",
       "level": "Warning",
       "warningLevel": 1,
-      "message": "'Npgsql' 8.0.2 paketinde önem derecesi yüksek olan bilinen bir https://github.com/advisories/GHSA-x9vc-6hfv-hg8c güvenlik açığı var",
+      "message": "Package 'Npgsql' 8.0.2 has a known high severity vulnerability, https://github.com/advisories/GHSA-x9vc-6hfv-hg8c",
       "libraryId": "Npgsql",
       "targetGraphs": [
         "net8.0"
