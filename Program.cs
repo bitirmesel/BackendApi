@@ -30,6 +30,7 @@ builder.Services.AddScoped<IGameService, GameService>();
 builder.Services.AddScoped<CloudinaryService>();
 
 // !!! KRİTİK EKLEME 1: Controller desteğini açıyoruz !!!
+// GameConfigController'ın çalışması için bu satır ŞARTTIR.
 builder.Services.AddControllers(); 
 
 // --------------------------------------------------------
@@ -109,9 +110,6 @@ using (var scope = app.Services.CreateScope())
 app.UseSwagger();
 app.UseSwaggerUI();
 
-// Eğer HTTPS yönlendirmesi kullanıyorsan bunu açabilirsin
-// app.UseHttpsRedirection();
-
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -120,10 +118,10 @@ app.UseAuthorization();
 // --------------------------------------------------------
 
 // !!! KRİTİK EKLEME 2: Controller rotalarını haritalıyoruz !!!
-// GameConfigController'ın çalışması için bu ŞARTTIR.
+// Tarayıcıdan gelen istekleri GameConfigController'a yönlendirmek için bu ŞARTTIR.
 app.MapControllers(); 
 
-// Mevcut Minimal API Endpoints
+// Mevcut Minimal API Endpoints (Bunlar aynen kalıyor)
 app.MapAuthEndpoints();
 app.MapTherapistEndpoints();
 app.MapPlayerEndpoints();
