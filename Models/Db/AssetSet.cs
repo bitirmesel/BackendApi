@@ -17,7 +17,7 @@ public class AssetSet
     public long LetterId { get; set; }
 
     [Column("asset_json")]
-    public string AssetJson { get; set; } = string.Empty; // JSON veya path
+    public string AssetJson { get; set; } // JSON veya path
 
     [Column("created_at")]
     public DateTime? CreatedAt { get; set; }
