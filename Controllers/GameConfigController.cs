@@ -4,7 +4,7 @@ using DktApi.Services;
 namespace DktApi.Controllers
 {
     [ApiController]
-    [Route("api/[gameconfig]")]
+    [Route("api/gameconfig")]
     public class GameConfigController : ControllerBase
     {
         private readonly IGameService _gameService;

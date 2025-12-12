@@ -1,0 +1,18 @@
+# Build Sonuçları (Render hatasına sebep olanlar)
+[Bb]in/
+[Oo]bj/
+
+# Visual Studio & VS Code Ayarları (Gereksiz)
+.vscode/
+.idea/
+.vs/
+*.user
+*.suo
+*.userprefs
+
+# Geçici Dosyalar
+*.log
+*.tmp
+
+# Mac Kullanıcıları için (Gereksiz)
+.DS_Store
