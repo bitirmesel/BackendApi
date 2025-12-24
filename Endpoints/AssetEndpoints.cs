@@ -75,5 +75,58 @@ public static class AssetEndpoints
         })
         .WithTags("Assets")
         .WithName("GetAssetSetByTask");
+
+        // ----------------------------------------------------
+// DEBUG/ADMIN: TÜM ASSET SET'LER (row row)
+// GET /api/asset-sets
+// Opsiyonel filtreler: ?gameId=1&letterId=2
+// Opsiyonel: ?includeJson=true  (AssetJson büyükse default false kalsın)
+// ----------------------------------------------------
+app.MapGet("/api/asset-sets", async (
+    AppDbContext db,
+    long? gameId,
+    long? letterId,
+    bool includeJson
+) =>
+{
+    var q = db.AssetSets
+        .AsNoTracking()
+        .Include(a => a.Game)
+        .Include(a => a.Letter)
+        .AsQueryable();
+
+    if (gameId.HasValue) q = q.Where(a => a.GameId == gameId.Value);
+    if (letterId.HasValue) q = q.Where(a => a.LetterId == letterId.Value);
+
+    var items = await q
+        .OrderByDescending(a => a.CreatedAt)
+        .Select(a => new
+        {
+            assetSetId = a.Id,
+            gameId = a.GameId,
+            gameName = a.Game != null ? a.Game.Name : null,
+
+            letterId = a.LetterId,
+            letterCode = a.Letter != null ? a.Letter.Code : null,
+            letterDisplayName = a.Letter != null ? a.Letter.DisplayName : null,
+
+            createdAt = a.CreatedAt,
+
+            // JSON çok büyük olabileceği için default false
+            assetJson = includeJson ? a.AssetJson : null,
+
+            // Referans sayıları (debug için güzel olur)
+            tasksCount = a.Tasks.Count,
+            sessionsCount = a.GameSessions.Count
+        })
+        .ToListAsync();
+
+    return Results.Ok(items);
+})
+.WithTags("Assets")
+.WithName("GetAllAssetSetsDebug");
+
     }
+
+    
 }
