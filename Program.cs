@@ -92,8 +92,12 @@ builder.Services.AddSwaggerGen(c =>
         }
     });
 });
-
+// HttpClient servisini sisteme ekler (BUNU EKLEMEZSEN PROJE ÇÖKER)
+builder.Services.AddHttpClient(); 
+// ----------------------------------
 var app = builder.Build();
+// HTTP isteklerini HTTPS'e yönlendir
+app.UseHttpsRedirection();
 
 // --------------------------------------------------------
 // 5. OTOMATİK MIGRATION
