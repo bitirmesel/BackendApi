@@ -76,19 +76,15 @@ public static class AssetEndpoints
         .WithTags("Assets")
         .WithName("GetAssetSetByTask");
 
-        // ----------------------------------------------------
-// DEBUG/ADMIN: TÜM ASSET SET'LER (row row)
-// GET /api/asset-sets
-// Opsiyonel filtreler: ?gameId=1&letterId=2
-// Opsiyonel: ?includeJson=true  (AssetJson büyükse default false kalsın)
-// ----------------------------------------------------
-app.MapGet("/api/asset-sets", async (
+        app.MapGet("/api/asset-sets", async (
     AppDbContext db,
     long? gameId,
     long? letterId,
-    bool includeJson
+    bool? includeJson
 ) =>
 {
+    bool inc = includeJson ?? false;
+
     var q = db.AssetSets
         .AsNoTracking()
         .Include(a => a.Game)
@@ -112,12 +108,11 @@ app.MapGet("/api/asset-sets", async (
 
             createdAt = a.CreatedAt,
 
-            // JSON çok büyük olabileceği için default false
-            assetJson = includeJson ? a.AssetJson : null,
+            assetJson = inc ? a.AssetJson : null,
 
-            // Referans sayıları (debug için güzel olur)
-            tasksCount = a.Tasks.Count,
-            sessionsCount = a.GameSessions.Count
+            // Count'lar bazı EF sürümlerinde sıkıntı çıkarabilir; garanti olsun diye subquery yaptım
+            tasksCount = db.TaskItems.Count(t => t.AssetSetId == a.Id),
+            sessionsCount = db.GameSessions.Count(s => s.AssetSetId == a.Id)
         })
         .ToListAsync();
 
@@ -125,6 +120,7 @@ app.MapGet("/api/asset-sets", async (
 })
 .WithTags("Assets")
 .WithName("GetAllAssetSetsDebug");
+
 
     }
 
