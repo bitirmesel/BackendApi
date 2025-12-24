@@ -75,5 +75,54 @@ public static class AssetEndpoints
         })
         .WithTags("Assets")
         .WithName("GetAssetSetByTask");
+
+        app.MapGet("/api/asset-sets", async (
+    AppDbContext db,
+    long? gameId,
+    long? letterId,
+    bool? includeJson
+) =>
+{
+    bool inc = includeJson ?? false;
+
+    var q = db.AssetSets
+        .AsNoTracking()
+        .Include(a => a.Game)
+        .Include(a => a.Letter)
+        .AsQueryable();
+
+    if (gameId.HasValue) q = q.Where(a => a.GameId == gameId.Value);
+    if (letterId.HasValue) q = q.Where(a => a.LetterId == letterId.Value);
+
+    var items = await q
+        .OrderByDescending(a => a.CreatedAt)
+        .Select(a => new
+        {
+            assetSetId = a.Id,
+            gameId = a.GameId,
+            gameName = a.Game != null ? a.Game.Name : null,
+
+            letterId = a.LetterId,
+            letterCode = a.Letter != null ? a.Letter.Code : null,
+            letterDisplayName = a.Letter != null ? a.Letter.DisplayName : null,
+
+            createdAt = a.CreatedAt,
+
+            assetJson = inc ? a.AssetJson : null,
+
+            // Count'lar bazı EF sürümlerinde sıkıntı çıkarabilir; garanti olsun diye subquery yaptım
+            tasksCount = db.TaskItems.Count(t => t.AssetSetId == a.Id),
+            sessionsCount = db.GameSessions.Count(s => s.AssetSetId == a.Id)
+        })
+        .ToListAsync();
+
+    return Results.Ok(items);
+})
+.WithTags("Assets")
+.WithName("GetAllAssetSetsDebug");
+
+
     }
+
+    
 }

@@ -124,5 +124,31 @@ public static class PlayerEndpoints
         })
         .WithTags("Students")
         .WithName("GetStudentDetail");
+
+        // ----------------------------------------------------
+// 4) TÜM PLAYER'LAR (DEBUG / ADMIN)
+// GET /api/players
+// ----------------------------------------------------
+app.MapGet("/api/players", async (AppDbContext db) =>
+{
+    var players = await db.Players
+        .OrderBy(p => p.Id)
+        .Select(p => new
+        {
+            id = p.Id,
+            name = p.Name,
+            email = p.Email,
+            lastLogin = p.LastLogin,
+            totalScore = p.TotalScore
+        })
+        .ToListAsync();
+
+    return Results.Ok(players);
+})
+.WithTags("Players")
+.WithName("GetAllPlayers");
+
     }
+
+    
 }
