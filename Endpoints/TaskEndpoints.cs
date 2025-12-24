@@ -192,6 +192,64 @@ app.MapGet("/api/players/{playerId:long}/tasks",
 .WithTags("Tasks")
 .WithName("GetAllPlayerTasks");
 
+// ----------------------------------------------------
+// DEBUG/ADMIN: TÜM TASKLAR (row row)
+// GET /api/tasks
+// İstersen query param ile filtre de var: ?playerId=1&therapistId=2&status=ASSIGNED
+// ----------------------------------------------------
+app.MapGet("/api/tasks", async (
+    AppDbContext db,
+    long? playerId,
+    long? therapistId,
+    string? status
+) =>
+{
+    var q = db.TaskItems
+        .AsNoTracking()
+        .Include(t => t.Player)
+        .Include(t => t.Therapist)
+        .Include(t => t.Game)
+        .Include(t => t.Letter)
+        .AsQueryable();
+
+    if (playerId.HasValue) q = q.Where(t => t.PlayerId == playerId.Value);
+    if (therapistId.HasValue) q = q.Where(t => t.TherapistId == therapistId.Value);
+    if (!string.IsNullOrWhiteSpace(status)) q = q.Where(t => t.Status == status);
+
+    var tasks = await q
+        .OrderByDescending(t => t.AssignedAt)
+        .Select(t => new
+        {
+            taskId = t.Id,
+
+            therapistId = t.TherapistId,
+            therapistName = t.Therapist != null ? t.Therapist.Name : null,
+
+            playerId = t.PlayerId,
+            playerName = t.Player != null ? t.Player.Name : null,
+
+            gameId = t.GameId,
+            gameName = t.Game != null ? t.Game.Name : null,
+
+            letterId = t.LetterId,
+            letterCode = t.Letter != null ? t.Letter.Code : null,
+            letterDisplayName = t.Letter != null ? t.Letter.DisplayName : null,
+
+            assetSetId = t.AssetSetId,
+            status = t.Status,
+            note = t.Note,
+
+            assignedAt = t.AssignedAt,
+            dueAt = t.DueAt
+        })
+        .ToListAsync();
+
+    return Results.Ok(tasks);
+})
+.WithTags("Tasks")
+.WithName("GetAllTasksDebug");
+
+
 
     }
 }
