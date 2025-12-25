@@ -10,34 +10,68 @@ using DktApi.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// =========================================================================
+// 1. STARTUP DEBUG (HATAYI BURADA YAKALAYACAĞIZ)
+// =========================================================================
+// Uygulama başlarken Render'daki değişkenleri görüyor mu test ediyoruz.
+Console.WriteLine("--------------------------------------------------");
+Console.WriteLine("[STARTUP] Uygulama Başlatılıyor...");
+
+var envUser = Environment.GetEnvironmentVariable("FLUENT_USER");
+var confUser = builder.Configuration["FLUENT_USER"];
+
+Console.WriteLine($"[ENV CHECK] OS Environment 'FLUENT_USER': '{envUser}'");
+Console.WriteLine($"[CONF CHECK] IConfiguration 'FLUENT_USER': '{confUser}'");
+
+if (string.IsNullOrEmpty(confUser))
+{
+    Console.WriteLine("[CRITICAL WARNING] FLUENT_USER yapılandırmadan okunamadı!");
+    Console.WriteLine("Olası Sebepler:");
+    Console.WriteLine("1. Render Environment sekmesinde 'Save Changes' yapılmadı.");
+    Console.WriteLine("2. Değişken isminde boşluk var (örn: 'FLUENT_USER ').");
+    Console.WriteLine("3. appsettings.json içinde bu değer boş string olarak tanımlı ve eziyor.");
+}
+else
+{
+    Console.WriteLine("[SUCCESS] FLUENT_USER başarıyla algılandı.");
+}
+Console.WriteLine("--------------------------------------------------");
+// =========================================================================
+
 // --------------------------------------------------------
-// 1. VERİTABANI BAĞLANTISI (PostgreSQL)
+// 2. VERİTABANI BAĞLANTISI (PostgreSQL)
 // --------------------------------------------------------
 var connStr = builder.Configuration.GetConnectionString("Pg");
 if (string.IsNullOrWhiteSpace(connStr))
 {
-    throw new InvalidOperationException("Connection string 'Pg' not found or empty!");
+    // Render bazen connection string'i "DATABASE_URL" olarak verir, onu da kontrol edelim
+    connStr = Environment.GetEnvironmentVariable("DATABASE_URL");
+    
+    if (string.IsNullOrWhiteSpace(connStr))
+        throw new InvalidOperationException("Connection string 'Pg' not found or empty!");
 }
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connStr));
 
 // --------------------------------------------------------
-// 2. SERVİS ENJEKSİYONLARI (Dependency Injection)
+// 3. SERVİS ENJEKSİYONLARI (Dependency Injection)
 // --------------------------------------------------------
 builder.Services.AddScoped<IGameRepository, GameRepository>();
 builder.Services.AddScoped<IGameService, GameService>();
 builder.Services.AddScoped<CloudinaryService>();
 
-// !!! KRİTİK EKLEME 1: Controller desteğini açıyoruz !!!
-// GameConfigController'ın çalışması için bu satır ŞARTTIR.
+// Controller desteği
 builder.Services.AddControllers(); 
 
 // --------------------------------------------------------
-// 3. KİMLİK DOĞRULAMA (JWT Auth)
+// 4. KİMLİK DOĞRULAMA (JWT Auth)
 // --------------------------------------------------------
 var jwtConfig = builder.Configuration.GetSection("Jwt");
 var keyParam = jwtConfig["Key"];
+// Emniyet sübabı: Eğer key yoksa default kullanmasın, hata versin veya güvenli loglasın
+if (string.IsNullOrEmpty(keyParam)) Console.WriteLine("[WARN] JWT Key config'den okunamadı, default değer kullanılabilir.");
+
 var keyBytes = Encoding.UTF8.GetBytes(keyParam ?? "super-secret-key-change-this-32chars-min");
 
 builder.Services
@@ -63,7 +97,7 @@ builder.Services
 builder.Services.AddAuthorization();
 
 // --------------------------------------------------------
-// 4. SWAGGER / OPENAPI
+// 5. SWAGGER / OPENAPI
 // --------------------------------------------------------
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -92,15 +126,17 @@ builder.Services.AddSwaggerGen(c =>
         }
     });
 });
-// HttpClient servisini sisteme ekler (BUNU EKLEMEZSEN PROJE ÇÖKER)
+
 builder.Services.AddHttpClient(); 
+
 // ----------------------------------
 var app = builder.Build();
-// HTTP isteklerini HTTPS'e yönlendir
-app.UseHttpsRedirection();
+
+// HTTP isteklerini HTTPS'e yönlendir (Render'da bazen loop yapabilir, dikkat)
+// app.UseHttpsRedirection(); // Render zaten https veriyor, bunu şimdilik kapalı tutabilirsin hata alırsan.
 
 // --------------------------------------------------------
-// 5. OTOMATİK MIGRATION
+// 6. OTOMATİK MIGRATION
 // --------------------------------------------------------
 using (var scope = app.Services.CreateScope())
 {
@@ -109,7 +145,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 // --------------------------------------------------------
-// 6. MIDDLEWARE
+// 7. MIDDLEWARE
 // --------------------------------------------------------
 app.UseSwagger();
 app.UseSwaggerUI();
@@ -118,14 +154,10 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // --------------------------------------------------------
-// 7. ENDPOINT MAPPING
+// 8. ENDPOINT MAPPING
 // --------------------------------------------------------
-
-// !!! KRİTİK EKLEME 2: Controller rotalarını haritalıyoruz !!!
-// Tarayıcıdan gelen istekleri GameConfigController'a yönlendirmek için bu ŞARTTIR.
 app.MapControllers(); 
 
-// Mevcut Minimal API Endpoints (Bunlar aynen kalıyor)
 app.MapAuthEndpoints();
 app.MapTherapistEndpoints();
 app.MapPlayerEndpoints();
