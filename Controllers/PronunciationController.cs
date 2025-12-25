@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Mvc;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text;
-// using DktApi.Models; // Gerekirse açarsın ama aşağıya ekledim garanti olsun diye.
 
 namespace DktApi.Controllers
 {
@@ -12,49 +11,67 @@ namespace DktApi.Controllers
     {
         private readonly IHttpClientFactory _httpClientFactory;
         
-        // Render Environment Variables'dan okuyacaklarımız
         private readonly string _apiUsername;
         private readonly string _apiPassword;
-        private readonly string _apiKey; 
+        private readonly string _apiKey;
 
-        // Token'ı hafızada tutalım
         private static string _cachedToken;
         private static DateTime _tokenExpiry = DateTime.MinValue;
 
         public PronunciationController(IHttpClientFactory httpClientFactory, IConfiguration configuration)
         {
             _httpClientFactory = httpClientFactory;
-            // .Trim() ile boşlukları temizliyoruz
-            _apiUsername = configuration["FLUENT_USER"]?.Trim();
-            _apiPassword = configuration["FLUENT_PASS"]?.Trim();
-            _apiKey = configuration["THE_FLUENT_ME_API_KEY"]?.Trim();
+            
+            // --- DETAYLI DEĞİŞKEN OKUMA ---
+            // Her birini tek tek okuyup logluyoruz (Şifreleri gizleyerek)
+            
+            _apiUsername = configuration["FLUENT_USER"];
+            Console.WriteLine($"[CONFIG CHECK] FLUENT_USER: '{_apiUsername}' (Boş mu: {string.IsNullOrEmpty(_apiUsername)})");
+
+            _apiPassword = configuration["FLUENT_PASS"];
+            string passLog = string.IsNullOrEmpty(_apiPassword) ? "YOK" : "VAR (" + _apiPassword.Length + " karakter)";
+            Console.WriteLine($"[CONFIG CHECK] FLUENT_PASS: {passLog}");
+
+            _apiKey = configuration["THE_FLUENT_ME_API_KEY"];
+            string keyLog = string.IsNullOrEmpty(_apiKey) ? "YOK" : "VAR (" + _apiKey.Length + " karakter)";
+            Console.WriteLine($"[CONFIG CHECK] THE_FLUENT_ME_API_KEY: {keyLog}");
+
+            // Varsa boşlukları temizle
+            _apiUsername = _apiUsername?.Trim();
+            _apiPassword = _apiPassword?.Trim();
+            _apiKey = _apiKey?.Trim();
         }
 
         [HttpPost("check")]
         public async Task<IActionResult> CheckPronunciation([FromForm] IFormFile audioFile, [FromForm] string text)
         {
-            if (audioFile == null || audioFile.Length == 0) 
-                return BadRequest("Ses dosyası yok.");
+            // 1. HANGİSİ EKSİK?
+            List<string> missingVars = new List<string>();
+            if (string.IsNullOrEmpty(_apiUsername)) missingVars.Add("FLUENT_USER");
+            if (string.IsNullOrEmpty(_apiPassword)) missingVars.Add("FLUENT_PASS");
+            if (string.IsNullOrEmpty(_apiKey)) missingVars.Add("THE_FLUENT_ME_API_KEY");
 
-            // Config Kontrolü
-            if (string.IsNullOrEmpty(_apiUsername) || string.IsNullOrEmpty(_apiPassword) || string.IsNullOrEmpty(_apiKey))
+            if (missingVars.Count > 0)
             {
-                Console.WriteLine("[ERROR] API Key veya User/Pass Render'da eksik!");
-                return StatusCode(500, "Sunucu Config Hatası: Environment Variables eksik.");
+                string errorMsg = "Sunucu Config Hatası! Eksik Değişkenler: " + string.Join(", ", missingVars);
+                Console.WriteLine($"[CRITICAL ERROR] {errorMsg}");
+                Console.WriteLine("Lütfen Render Environment Variables ekranını kontrol edin.");
+                return StatusCode(500, errorMsg);
             }
+
+            if (audioFile == null || audioFile.Length == 0) return BadRequest("Ses dosyası yok.");
 
             var client = _httpClientFactory.CreateClient();
 
             try
             {
-                // 1. ADIM: OTOMATİK LOGIN OL VE TOKEN AL
+                // LOGIN VE TOKEN
                 string token = await GetValidToken(client);
 
-                // Token'ı başlığa ekle
                 client.DefaultRequestHeaders.Clear();
                 client.DefaultRequestHeaders.Add("x-access-token", token);
 
-                // 2. ADIM: POST OLUŞTUR (ID: 76 Türkçe)
+                // POST OLUŞTUR
                 var postContent = new
                 {
                     post_title = "Unity Kaydı",
@@ -66,21 +83,16 @@ namespace DktApi.Controllers
                 
                 if (!postResponse.IsSuccessStatusCode)
                 {
-                    if(postResponse.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-                        _cachedToken = null; // Token bayatlamış olabilir
-                    
-                    return BadRequest("Post Oluşturma Hatası: " + await postResponse.Content.ReadAsStringAsync());
+                    if(postResponse.StatusCode == System.Net.HttpStatusCode.Unauthorized) _cachedToken = null;
+                    return BadRequest("Post Hatası: " + await postResponse.Content.ReadAsStringAsync());
                 }
 
-                // Post ID'yi al
                 var postRespStr = await postResponse.Content.ReadAsStringAsync();
                 var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                 var postObj = JsonSerializer.Deserialize<CreatePostResponse>(postRespStr, options);
-                
                 string postId = postObj?.post_id;
-                if(string.IsNullOrEmpty(postId)) return BadRequest("API'den Post ID dönmedi.");
 
-                // 3. ADIM: SESİ GÖNDER
+                // SES GÖNDER
                 using (var content = new MultipartFormDataContent())
                 {
                     using (var stream = audioFile.OpenReadStream())
@@ -100,58 +112,48 @@ namespace DktApi.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[CRITICAL] {ex.Message}");
-                return StatusCode(500, "Sunucu Hatası: " + ex.Message);
+                return StatusCode(500, "İşlem Hatası: " + ex.Message);
             }
         }
 
-        // --- LOGIN YARDIMCISI ---
         private async Task<string> GetValidToken(HttpClient client)
         {
-            if (!string.IsNullOrEmpty(_cachedToken) && DateTime.Now < _tokenExpiry)
-                return _cachedToken;
+            if (!string.IsNullOrEmpty(_cachedToken) && DateTime.Now < _tokenExpiry) return _cachedToken;
 
-            // Basic Auth Header Oluşturma
             var authBytes = Encoding.ASCII.GetBytes($"{_apiUsername}:{_apiPassword}");
             var authString = Convert.ToBase64String(authBytes);
             
             var request = new HttpRequestMessage(HttpMethod.Get, "https://thefluent.me/api/swagger/login");
             request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authString);
-            request.Headers.Add("x-api-key", _apiKey); // API Key'i de ekliyoruz
+            request.Headers.Add("x-api-key", _apiKey);
 
             var response = await client.SendAsync(request);
-            var respStr = await response.Content.ReadAsStringAsync();
-
+            
             if (!response.IsSuccessStatusCode)
-                throw new Exception($"Login Başarısız! ({response.StatusCode}) Hata: {respStr}");
+                throw new Exception($"Login API Hatası: {response.StatusCode} - {await response.Content.ReadAsStringAsync()}");
 
-            // JSON Parse
-            using (JsonDocument doc = JsonDocument.Parse(respStr))
+            var json = await response.Content.ReadAsStringAsync();
+            using (JsonDocument doc = JsonDocument.Parse(json))
             {
-                if (doc.RootElement.TryGetProperty("token", out var tokenProp))
+                if (doc.RootElement.TryGetProperty("token", out var t))
                 {
-                    _cachedToken = tokenProp.GetString();
+                    _cachedToken = t.GetString();
                     _tokenExpiry = DateTime.Now.AddMinutes(50);
                     return _cachedToken;
                 }
-                else if (doc.RootElement.ValueKind == JsonValueKind.String) // Bazen direkt string döner
+                else if (doc.RootElement.ValueKind == JsonValueKind.String)
                 {
                      _cachedToken = doc.RootElement.GetString();
                      _tokenExpiry = DateTime.Now.AddMinutes(50);
                      return _cachedToken;
                 }
-                else
-                {
-                    throw new Exception("Token bulunamadı: " + respStr);
-                }
             }
+            throw new Exception("Token alınamadı.");
         }
     }
 
-    // --- YARDIMCI SINIFLAR (Dosyanın sonuna ekledik ki hata vermesin) ---
     public class CreatePostResponse
     {
         public string post_id { get; set; }
-        public string message { get; set; }
     }
 }
