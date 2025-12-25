@@ -2,10 +2,9 @@ using Microsoft.AspNetCore.Mvc;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text;
-using UnityBackend.Models; // Modellerin olduğu namespace
-using UnityEngine;
+// using DktApi.Models; // Gerekirse açarsın ama aşağıya ekledim garanti olsun diye.
 
-namespace UnityBackend.Controllers
+namespace DktApi.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
@@ -16,20 +15,19 @@ namespace UnityBackend.Controllers
         // Render Environment Variables'dan okuyacaklarımız
         private readonly string _apiUsername;
         private readonly string _apiPassword;
-        private readonly string _apiKey; // 2025... ile başlayan anahtarın
+        private readonly string _apiKey; 
 
-        // Token'ı hafızada tutalım ki her seferinde tekrar login olmasın
+        // Token'ı hafızada tutalım
         private static string _cachedToken;
         private static DateTime _tokenExpiry = DateTime.MinValue;
 
         public PronunciationController(IHttpClientFactory httpClientFactory, IConfiguration configuration)
         {
             _httpClientFactory = httpClientFactory;
-            _apiUsername = configuration["FLUENT_USER"];
-            _apiPassword = configuration["FLUENT_PASS"];
-            // Eğer API Key de lazımsa environment'a ekleyip buradan çekebilirsin
-            // Şimdilik login için User/Pass yetiyor gibi görünüyor ama Swagger resminde key de var.
-             _apiKey = configuration["THE_FLUENT_ME_API_KEY"]; 
+            // .Trim() ile boşlukları temizliyoruz
+            _apiUsername = configuration["FLUENT_USER"]?.Trim();
+            _apiPassword = configuration["FLUENT_PASS"]?.Trim();
+            _apiKey = configuration["THE_FLUENT_ME_API_KEY"]?.Trim();
         }
 
         [HttpPost("check")]
@@ -38,6 +36,13 @@ namespace UnityBackend.Controllers
             if (audioFile == null || audioFile.Length == 0) 
                 return BadRequest("Ses dosyası yok.");
 
+            // Config Kontrolü
+            if (string.IsNullOrEmpty(_apiUsername) || string.IsNullOrEmpty(_apiPassword) || string.IsNullOrEmpty(_apiKey))
+            {
+                Console.WriteLine("[ERROR] API Key veya User/Pass Render'da eksik!");
+                return StatusCode(500, "Sunucu Config Hatası: Environment Variables eksik.");
+            }
+
             var client = _httpClientFactory.CreateClient();
 
             try
@@ -45,38 +50,35 @@ namespace UnityBackend.Controllers
                 // 1. ADIM: OTOMATİK LOGIN OL VE TOKEN AL
                 string token = await GetValidToken(client);
 
-                // Token'ı başlığa ekle (Authorization: Bearer ...)
-                // VEYA resimdeki gibi x-access-token olabilir, Swagger sonucuna göre token'ı direkt header'a gömüyoruz.
+                // Token'ı başlığa ekle
                 client.DefaultRequestHeaders.Clear();
-                // Swagger çıktısında genelde JWT tokenlar "Bearer " ile kullanılır ama
-                // senin önceki denemelerinde x-access-token kullanılmıştı.
-                // Resimde token cevabı saf string dönmüş.
-                // En güvenlisi token'ı "x-access-token" olarak eklemek.
                 client.DefaultRequestHeaders.Add("x-access-token", token);
 
-                // 2. ADIM: POST OLUŞTUR (ID: 76 Türkçe - Resminden teyitli)
+                // 2. ADIM: POST OLUŞTUR (ID: 76 Türkçe)
                 var postContent = new
                 {
                     post_title = "Unity Kaydı",
                     post_content = text,
-                    post_language_id = "76" // Türkçe Kadın Sesi (Resimden 76 olduğu kesinleşti)
+                    post_language_id = "76"
                 };
 
                 var postResponse = await client.PostAsJsonAsync("https://thefluent.me/api/swagger/post", postContent);
                 
                 if (!postResponse.IsSuccessStatusCode)
                 {
-                    // Token süresi dolmuş olabilir, cache'i temizle
                     if(postResponse.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-                        _cachedToken = null; 
+                        _cachedToken = null; // Token bayatlamış olabilir
                     
                     return BadRequest("Post Oluşturma Hatası: " + await postResponse.Content.ReadAsStringAsync());
                 }
 
                 // Post ID'yi al
                 var postRespStr = await postResponse.Content.ReadAsStringAsync();
-                var postObj = JsonSerializer.Deserialize<CreatePostResponse>(postRespStr);
-                string postId = postObj.post_id;
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var postObj = JsonSerializer.Deserialize<CreatePostResponse>(postRespStr, options);
+                
+                string postId = postObj?.post_id;
+                if(string.IsNullOrEmpty(postId)) return BadRequest("API'den Post ID dönmedi.");
 
                 // 3. ADIM: SESİ GÖNDER
                 using (var content = new MultipartFormDataContent())
@@ -98,6 +100,7 @@ namespace UnityBackend.Controllers
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"[CRITICAL] {ex.Message}");
                 return StatusCode(500, "Sunucu Hatası: " + ex.Message);
             }
         }
@@ -105,36 +108,37 @@ namespace UnityBackend.Controllers
         // --- LOGIN YARDIMCISI ---
         private async Task<string> GetValidToken(HttpClient client)
         {
-            // Eğer elimizde geçerli bir token varsa tekrar sorma
             if (!string.IsNullOrEmpty(_cachedToken) && DateTime.Now < _tokenExpiry)
                 return _cachedToken;
 
-            // Swagger resmindeki gibi Basic Auth başlığı oluşturuyoruz
+            // Basic Auth Header Oluşturma
             var authBytes = Encoding.ASCII.GetBytes($"{_apiUsername}:{_apiPassword}");
             var authString = Convert.ToBase64String(authBytes);
             
             var request = new HttpRequestMessage(HttpMethod.Get, "https://thefluent.me/api/swagger/login");
             request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authString);
-            
-            // Eğer Swagger resmindeki gibi API Key de istiyorsa ekleyelim:
-            if(!string.IsNullOrEmpty(_apiKey))
-                request.Headers.Add("x-api-key", _apiKey);
+            request.Headers.Add("x-api-key", _apiKey); // API Key'i de ekliyoruz
 
             var response = await client.SendAsync(request);
             var respStr = await response.Content.ReadAsStringAsync();
 
             if (!response.IsSuccessStatusCode)
-                throw new Exception($"Login Başarısız! Hata: {respStr}");
+                throw new Exception($"Login Başarısız! ({response.StatusCode}) Hata: {respStr}");
 
-            // JSON Cevabını Parse Et: { "token": "eyJ..." }
+            // JSON Parse
             using (JsonDocument doc = JsonDocument.Parse(respStr))
             {
                 if (doc.RootElement.TryGetProperty("token", out var tokenProp))
                 {
                     _cachedToken = tokenProp.GetString();
-                    // Token'ı 50 dakika geçerli say (Genelde 1 saattir)
                     _tokenExpiry = DateTime.Now.AddMinutes(50);
                     return _cachedToken;
+                }
+                else if (doc.RootElement.ValueKind == JsonValueKind.String) // Bazen direkt string döner
+                {
+                     _cachedToken = doc.RootElement.GetString();
+                     _tokenExpiry = DateTime.Now.AddMinutes(50);
+                     return _cachedToken;
                 }
                 else
                 {
@@ -142,5 +146,12 @@ namespace UnityBackend.Controllers
                 }
             }
         }
+    }
+
+    // --- YARDIMCI SINIFLAR (Dosyanın sonuna ekledik ki hata vermesin) ---
+    public class CreatePostResponse
+    {
+        public string post_id { get; set; }
+        public string message { get; set; }
     }
 }
