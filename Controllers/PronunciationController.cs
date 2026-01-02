@@ -22,13 +22,13 @@ namespace DktApi.Controllers
         // PROD'da bunları kesinlikle ENV'e taşı.
         private const string HARDCODED_USER = "meryem.kilic";
         private const string HARDCODED_PASS = "Melv18309";
-        private const string HARDCODED_KEY  = "20251224164351-fQaj7AdeKhp-87831";
+        private const string HARDCODED_KEY = "20251224164351-fQaj7AdeKhp-87831";
 
         private static string _cachedToken = "";
         private static DateTime _tokenExpiry = DateTime.MinValue;
 
         private const string FLUENT_LOGIN = "https://thefluent.me/api/swagger/login";
-        private const string FLUENT_POST  = "https://thefluent.me/api/swagger/post";
+        private const string FLUENT_POST = "https://thefluent.me/api/swagger/post";
 
         public PronunciationController(IHttpClientFactory httpClientFactory)
         {
@@ -273,39 +273,58 @@ namespace DktApi.Controllers
         private async Task<string> GetValidToken(HttpClient client)
         {
             if (!string.IsNullOrEmpty(_cachedToken) && DateTime.Now < _tokenExpiry)
-                return _cachedToken;
+                return _cachedToken!;
 
             Console.WriteLine("[PRON] Login attempt...");
 
-            // POST login (explicit)
+            // --------- 1) POST login dene ---------
             var loginJson = JsonSerializer.Serialize(new { username = HARDCODED_USER, password = HARDCODED_PASS });
 
-            using var loginReq = new HttpRequestMessage(HttpMethod.Post, FLUENT_LOGIN);
-            loginReq.Headers.Clear();
-            loginReq.Headers.Add("x-api-key", HARDCODED_KEY);
-            loginReq.Headers.Accept.Clear();
-            loginReq.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            loginReq.Content = new StringContent(loginJson, Encoding.UTF8, "application/json");
+            using var postReq = new HttpRequestMessage(HttpMethod.Post, FLUENT_LOGIN);
+            postReq.Headers.Add("x-api-key", HARDCODED_KEY);
+            postReq.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            postReq.Content = new StringContent(loginJson, Encoding.UTF8, "application/json");
 
-            var resp = await client.SendAsync(loginReq);
-            var body = await resp.Content.ReadAsStringAsync();
+            HttpResponseMessage resp = await client.SendAsync(postReq);
+            string body = await resp.Content.ReadAsStringAsync();
 
-            Console.WriteLine($"[PRON] Login status={(int)resp.StatusCode} body={body}");
+            Console.WriteLine($"[PRON] Login(POST) status={(int)resp.StatusCode} body={body}");
 
+            // --------- 2) POST başarısızsa GET BasicAuth dene ---------
             if (!resp.IsSuccessStatusCode)
-                throw new Exception("Login Başarısız: " + body);
+            {
+                Console.WriteLine($"[PRON] POST login failed. Trying GET BasicAuth...");
 
-            // Token parse
+                var authBytes = Encoding.ASCII.GetBytes($"{HARDCODED_USER}:{HARDCODED_PASS}");
+                var authString = Convert.ToBase64String(authBytes);
+
+                using var getReq = new HttpRequestMessage(HttpMethod.Get, FLUENT_LOGIN);
+                getReq.Headers.Authorization = new AuthenticationHeaderValue("Basic", authString);
+                getReq.Headers.Add("x-api-key", HARDCODED_KEY);
+                getReq.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                resp = await client.SendAsync(getReq);
+                body = await resp.Content.ReadAsStringAsync();
+
+                Console.WriteLine($"[PRON] Login(GET) status={(int)resp.StatusCode} body={body}");
+
+                if (!resp.IsSuccessStatusCode)
+                    throw new Exception("Login Başarısız: " + body);
+            }
+
+            // --------- Token parse ---------
+            // {"token":"..."} veya "..." gelme ihtimali
             using var doc = JsonDocument.Parse(body);
+
             if (doc.RootElement.ValueKind == JsonValueKind.Object &&
                 doc.RootElement.TryGetProperty("token", out var t) &&
                 t.ValueKind == JsonValueKind.String)
             {
-                _cachedToken = t.GetString() ?? "";
+                _cachedToken = t.GetString();
             }
             else if (doc.RootElement.ValueKind == JsonValueKind.String)
             {
-                _cachedToken = doc.RootElement.GetString() ?? "";
+                _cachedToken = doc.RootElement.GetString();
             }
             else
             {
@@ -316,8 +335,9 @@ namespace DktApi.Controllers
                 throw new Exception("Token boş geldi.");
 
             _tokenExpiry = DateTime.Now.AddMinutes(50);
-            return _cachedToken;
+            return _cachedToken!;
         }
+
 
         // -------------------------
         // WAV normalize: 16kHz mono PCM16
