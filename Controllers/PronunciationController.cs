@@ -241,48 +241,78 @@ namespace DktApi.Controllers
         // Token
         // -------------------------
         private async Task<string> GetValidToken(HttpClient client)
-        {
-            if (!string.IsNullOrEmpty(_cachedToken) && DateTime.Now < _tokenExpiry)
-                return _cachedToken!;
+{
+    if (!string.IsNullOrEmpty(_cachedToken) && DateTime.Now < _tokenExpiry)
+        return _cachedToken!;
 
-            var loginJson = JsonSerializer.Serialize(new { username = HARDCODED_USER, password = HARDCODED_PASS });
+    // 1) POST dene
+    var loginJson = JsonSerializer.Serialize(new { username = HARDCODED_USER, password = HARDCODED_PASS });
 
-            using var req = new HttpRequestMessage(HttpMethod.Post, FLUENT_LOGIN);
-            req.Headers.Add("x-api-key", HARDCODED_KEY);
-            req.Headers.Accept.Clear();
-            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            req.Content = new StringContent(loginJson, Encoding.UTF8, "application/json");
+    using var postReq = new HttpRequestMessage(HttpMethod.Post, FLUENT_LOGIN);
+    postReq.Headers.Add("x-api-key", HARDCODED_KEY);
+    postReq.Headers.Accept.Clear();
+    postReq.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+    postReq.Content = new StringContent(loginJson, Encoding.UTF8, "application/json");
 
-            var resp = await client.SendAsync(req);
-            var body = await resp.Content.ReadAsStringAsync();
+    var postResp = await client.SendAsync(postReq);
+    var postBody = await postResp.Content.ReadAsStringAsync();
 
-            Console.WriteLine($"[PRON] Login status={(int)resp.StatusCode} body={body}");
+    Console.WriteLine($"[PRON] Login(POST) status={(int)postResp.StatusCode} body={postBody}");
 
-            if (!resp.IsSuccessStatusCode)
-                throw new Exception("Login Başarısız: " + body);
+    // POST başarılıysa parse et
+    if (postResp.IsSuccessStatusCode)
+    {
+        _cachedToken = ExtractTokenFromLoginBody(postBody);
+        _tokenExpiry = DateTime.Now.AddMinutes(50);
+        return _cachedToken!;
+    }
 
-            using var doc = JsonDocument.Parse(body);
-            if (doc.RootElement.ValueKind == JsonValueKind.Object &&
-                doc.RootElement.TryGetProperty("token", out var t) &&
-                t.ValueKind == JsonValueKind.String)
-            {
-                _cachedToken = t.GetString();
-            }
-            else if (doc.RootElement.ValueKind == JsonValueKind.String)
-            {
-                _cachedToken = doc.RootElement.GetString();
-            }
-            else
-            {
-                throw new Exception("Token alınamadı. Login response: " + body);
-            }
+    // 2) POST 405 veya başarısızsa → GET BasicAuth fallback
+    var authBytes = Encoding.ASCII.GetBytes($"{HARDCODED_USER}:{HARDCODED_PASS}");
+    var authString = Convert.ToBase64String(authBytes);
 
-            if (string.IsNullOrWhiteSpace(_cachedToken))
-                throw new Exception("Token boş geldi.");
+    using var getReq = new HttpRequestMessage(HttpMethod.Get, FLUENT_LOGIN);
+    getReq.Headers.Authorization = new AuthenticationHeaderValue("Basic", authString);
+    getReq.Headers.Add("x-api-key", HARDCODED_KEY);
+    getReq.Headers.Accept.Clear();
+    getReq.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-            _tokenExpiry = DateTime.Now.AddMinutes(50);
-            return _cachedToken!;
-        }
+    var getResp = await client.SendAsync(getReq);
+    var getBody = await getResp.Content.ReadAsStringAsync();
+
+    Console.WriteLine($"[PRON] Login(GET) status={(int)getResp.StatusCode} body={getBody}");
+
+    if (!getResp.IsSuccessStatusCode)
+        throw new Exception("Login Başarısız: " + getBody);
+
+    _cachedToken = ExtractTokenFromLoginBody(getBody);
+    _tokenExpiry = DateTime.Now.AddMinutes(50);
+    return _cachedToken!;
+}
+
+private static string ExtractTokenFromLoginBody(string body)
+{
+    using var doc = JsonDocument.Parse(body);
+
+    // { "token": "..." }
+    if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+        doc.RootElement.TryGetProperty("token", out var t) &&
+        t.ValueKind == JsonValueKind.String)
+    {
+        var token = t.GetString();
+        if (!string.IsNullOrWhiteSpace(token)) return token!;
+    }
+
+    // "tokenstring"
+    if (doc.RootElement.ValueKind == JsonValueKind.String)
+    {
+        var token = doc.RootElement.GetString();
+        if (!string.IsNullOrWhiteSpace(token)) return token!;
+    }
+
+    throw new Exception("Token alınamadı. Login response: " + body);
+}
+
 
         // -------------------------
         // WAV normalize: 16kHz mono PCM16
