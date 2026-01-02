@@ -27,7 +27,7 @@ namespace DktApi.Controllers
 
         private const string FLUENT_LOGIN = "https://thefluent.me/api/swagger/login";
         private const string FLUENT_POST  = "https://thefluent.me/api/swagger/post";
-        private const string FLUENT_SCORE = "https://thefluent.me/api/swagger/score/";
+        private const string FLUENT_SCORE = "https://thefluent.me/api/swagger/score/"; // + {postId}
 
         public PronunciationController(IHttpClientFactory httpClientFactory)
         {
@@ -42,19 +42,20 @@ namespace DktApi.Controllers
             if (string.IsNullOrWhiteSpace(text))
                 return BadRequest(new { message = "Text alanı boş." });
 
-            // audio_file (Unity) veya audioFile (Postman) ikisini de yakala
+            // audio_file (Unity) veya audioFile (Postman)
             IFormFile? audioFile = null;
 
-            // 1) Request.Form.Files içinde ara
             if (Request.Form?.Files != null && Request.Form.Files.Count > 0)
             {
-                audioFile = Request.Form.Files.GetFile("audio_file")
-                           ?? Request.Form.Files.GetFile("audioFile")
-                           ?? Request.Form.Files.FirstOrDefault();
+                audioFile =
+                    Request.Form.Files.GetFile("audio_file") ??
+                    Request.Form.Files.GetFile("audioFile") ??
+                    Request.Form.Files.GetFile("audio") ??
+                    Request.Form.Files.FirstOrDefault();
             }
 
             if (audioFile == null || audioFile.Length == 0)
-                return BadRequest(new { message = "Ses explain: audio_file / audioFile bulunamadı." });
+                return BadRequest(new { message = "Ses dosyası yok. form-data'da audio_file / audioFile gönder." });
 
             // input bytes
             byte[] inputBytes;
@@ -68,10 +69,10 @@ namespace DktApi.Controllers
 
             try
             {
-                // 1) token
+                // 1) Token
                 var token = await GetValidToken(client);
 
-                // 2) post oluştur
+                // 2) Post oluştur
                 var postRes = await CreatePostWithFallback(client, token, text);
                 if (!postRes.isSuccess)
                 {
@@ -82,17 +83,19 @@ namespace DktApi.Controllers
                 var postId = postRes.postId!;
                 Console.WriteLine($"[PRON] Post ID OK: {postId}");
 
-                // 3) normalize: 16k mono PCM16 WAV
-                var normalizedBytes = ConvertTo16kMonoPcm16(inputBytes);
+                // 3) WAV normalize: 16kHz mono PCM16 WAV
+                var normalizedWav = ConvertTo16kMonoPcm16(inputBytes);
 
-                var inputInfo = ReadWavInfo(inputBytes);
-                var normInfo  = ReadWavInfo(normalizedBytes);
+                // debug info
+                var inputInfo = ReadWavInfoSafe(inputBytes);
+                var normInfo  = ReadWavInfoSafe(normalizedWav);
 
-                Console.WriteLine($"[PRON] WAV input:  sr={inputInfo.sampleRate} ch={inputInfo.numChannels} bps={inputInfo.bitsPerSample} bytes={inputInfo.totalBytes}");
-                Console.WriteLine($"[PRON] WAV norm :  sr={normInfo.sampleRate} ch={normInfo.numChannels} bps={normInfo.bitsPerSample} bytes={normInfo.totalBytes}");
+                Console.WriteLine($"[PRON] WAV IN :  ch={inputInfo.numChannels} sr={inputInfo.sampleRate} bps={inputInfo.bitsPerSample} bytes={inputInfo.totalBytes}");
+                Console.WriteLine($"[PRON] WAV OUT: ch={normInfo.numChannels}  sr={normInfo.sampleRate}  bps={normInfo.bitsPerSample}  bytes={normInfo.totalBytes}");
 
-                // 4) SCORE: normalizedBytes'ı yolla
-                var scoreRes = await SendScore(client, token, postId, normalizedBytes);
+                // 4) SCORE gönder (WAV)
+                // Fluent tarafında field adı bazen "audio_file", bazen "audioFile" olabiliyor.
+                var scoreRes = await SendScoreWavWithDualField(client, token, postId, normalizedWav);
 
                 if (!scoreRes.isSuccess)
                 {
@@ -101,7 +104,7 @@ namespace DktApi.Controllers
                         {
                             message = "Puanlama Hatası",
                             detail = scoreRes.body,
-                            postId = postId,
+                            postId,
                             wavInfo = new
                             {
                                 input = new { inputInfo.audioFormat, inputInfo.numChannels, inputInfo.sampleRate, inputInfo.bitsPerSample, inputInfo.totalBytes },
@@ -110,7 +113,7 @@ namespace DktApi.Controllers
                         });
                 }
 
-                // FluentMe score JSON'unu Unity parse edecek şekilde aynen dön
+                // FluentMe score JSON'unu aynen dön (Unity DTO parse edecek)
                 return Content(scoreRes.body, "application/json");
             }
             catch (Exception ex)
@@ -121,22 +124,27 @@ namespace DktApi.Controllers
         }
 
         // -------------------------
-        // SCORE
+        // SCORE (WAV) - dual field name
         // -------------------------
         private async Task<(bool isSuccess, HttpStatusCode? status, string body)>
-            SendScore(HttpClient client, string token, string postId, byte[] wavBytes)
+            SendScoreWavWithDualField(HttpClient client, string token, string postId, byte[] wavBytes)
         {
             using var multipart = new MultipartFormDataContent();
 
-            var fileContent = new ByteArrayContent(wavBytes);
-            fileContent.Headers.ContentType = new MediaTypeHeaderValue("audio/wav");
+            // Part-1: audio_file
+            var file1 = new ByteArrayContent(wavBytes);
+            file1.Headers.ContentType = new MediaTypeHeaderValue("audio/wav");
+            multipart.Add(file1, "audio_file", "recording.wav");
 
-            // field adı kesin "audio_file" olmalı
-            multipart.Add(fileContent, "audio_file", "recording.wav");
+            // Part-2: audioFile (bazı backend’ler böyle bekliyor)
+            var file2 = new ByteArrayContent(wavBytes);
+            file2.Headers.ContentType = new MediaTypeHeaderValue("audio/wav");
+            multipart.Add(file2, "audioFile", "recording.wav");
 
             using var req = new HttpRequestMessage(HttpMethod.Post, FLUENT_SCORE + postId);
             req.Headers.Add("x-access-token", token);
             req.Headers.Add("x-api-key", HARDCODED_KEY);
+            req.Headers.Accept.Clear();
             req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             req.Content = multipart;
 
@@ -155,7 +163,7 @@ namespace DktApi.Controllers
         }
 
         // -------------------------
-        // FluentMe: Create Post (Fallback)
+        // FluentMe: Create Post
         // -------------------------
         private async Task<(bool isSuccess, HttpStatusCode? status, string body, string? postId)>
             CreatePostWithFallback(HttpClient client, string token, string text)
@@ -189,6 +197,7 @@ namespace DktApi.Controllers
 
             req.Headers.Add("x-access-token", token);
             req.Headers.Add("x-api-key", HARDCODED_KEY);
+            req.Headers.Accept.Clear();
             req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
             req.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
@@ -229,45 +238,28 @@ namespace DktApi.Controllers
         }
 
         // -------------------------
-        // Token (POST then GET BasicAuth fallback)
+        // Token
         // -------------------------
         private async Task<string> GetValidToken(HttpClient client)
         {
             if (!string.IsNullOrEmpty(_cachedToken) && DateTime.Now < _tokenExpiry)
                 return _cachedToken!;
 
-            // POST dene
             var loginJson = JsonSerializer.Serialize(new { username = HARDCODED_USER, password = HARDCODED_PASS });
 
-            using var postReq = new HttpRequestMessage(HttpMethod.Post, FLUENT_LOGIN);
-            postReq.Headers.Add("x-api-key", HARDCODED_KEY);
-            postReq.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            postReq.Content = new StringContent(loginJson, Encoding.UTF8, "application/json");
+            using var req = new HttpRequestMessage(HttpMethod.Post, FLUENT_LOGIN);
+            req.Headers.Add("x-api-key", HARDCODED_KEY);
+            req.Headers.Accept.Clear();
+            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            req.Content = new StringContent(loginJson, Encoding.UTF8, "application/json");
 
-            HttpResponseMessage resp = await client.SendAsync(postReq);
-            string body = await resp.Content.ReadAsStringAsync();
+            var resp = await client.SendAsync(req);
+            var body = await resp.Content.ReadAsStringAsync();
 
-            Console.WriteLine($"[PRON] Login(POST) status={(int)resp.StatusCode} body={body}");
+            Console.WriteLine($"[PRON] Login status={(int)resp.StatusCode} body={body}");
 
             if (!resp.IsSuccessStatusCode)
-            {
-                // GET BasicAuth dene
-                var authBytes = Encoding.ASCII.GetBytes($"{HARDCODED_USER}:{HARDCODED_PASS}");
-                var authString = Convert.ToBase64String(authBytes);
-
-                using var getReq = new HttpRequestMessage(HttpMethod.Get, FLUENT_LOGIN);
-                getReq.Headers.Authorization = new AuthenticationHeaderValue("Basic", authString);
-                getReq.Headers.Add("x-api-key", HARDCODED_KEY);
-                getReq.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
-                resp = await client.SendAsync(getReq);
-                body = await resp.Content.ReadAsStringAsync();
-
-                Console.WriteLine($"[PRON] Login(GET) status={(int)resp.StatusCode} body={body}");
-
-                if (!resp.IsSuccessStatusCode)
-                    throw new Exception("Login Başarısız: " + body);
-            }
+                throw new Exception("Login Başarısız: " + body);
 
             using var doc = JsonDocument.Parse(body);
             if (doc.RootElement.ValueKind == JsonValueKind.Object &&
@@ -318,7 +310,6 @@ namespace DktApi.Controllers
                 sampleProvider = new WdlResamplingSampleProvider(sampleProvider, 16000);
             }
 
-            // PCM16 yaz
             var outFormat = new WaveFormat(16000, 16, 1);
 
             using var outMs = new MemoryStream();
@@ -337,17 +328,24 @@ namespace DktApi.Controllers
             return outMs.ToArray();
         }
 
-        private static (int audioFormat, int numChannels, int sampleRate, int bitsPerSample, int totalBytes) ReadWavInfo(byte[] wavBytes)
+        private static (int audioFormat, int numChannels, int sampleRate, int bitsPerSample, int totalBytes)
+            ReadWavInfoSafe(byte[] wavBytes)
         {
-            using var ms = new MemoryStream(wavBytes);
-            using var r = new WaveFileReader(ms);
-            var wf = r.WaveFormat;
+            try
+            {
+                using var ms = new MemoryStream(wavBytes);
+                using var r = new WaveFileReader(ms);
+                var wf = r.WaveFormat;
 
-            return (wf.Encoding == WaveFormatEncoding.Pcm ? 1 : 0,
-                    wf.Channels,
-                    wf.SampleRate,
-                    wf.BitsPerSample,
-                    wavBytes.Length);
+                int audioFormat = wf.Encoding == WaveFormatEncoding.Pcm ? 1 : 0;
+
+                return (audioFormat, wf.Channels, wf.SampleRate, wf.BitsPerSample, wavBytes.Length);
+            }
+            catch
+            {
+                // WAV değilse (Unity bazen raw gönderebilir) en azından bytes dönelim
+                return (0, 0, 0, 0, wavBytes.Length);
+            }
         }
 
         public class CreatePostResponse
