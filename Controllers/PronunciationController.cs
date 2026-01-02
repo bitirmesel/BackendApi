@@ -13,7 +13,7 @@ namespace DktApi.Controllers
     {
         private readonly IHttpClientFactory _httpClientFactory;
 
-        // TEST İÇİN SABİT
+        // --- ŞİMDİLİK HARDCODE (Render ENV'e taşıyabilirsin) ---
         private const string HARDCODED_USER = "meryem.kilic";
         private const string HARDCODED_PASS = "Melv18309";
         private const string HARDCODED_KEY  = "20251224164351-fQaj7AdeKhp-87831";
@@ -26,40 +26,49 @@ namespace DktApi.Controllers
             _httpClientFactory = httpClientFactory;
         }
 
+        // Unity -> backend:
+        // form.AddBinaryData("audio_file", bytes, "recording.wav", "audio/wav");
+        // form.AddField("text", "kedi");
         [HttpPost("check")]
-        public async Task<IActionResult> CheckPronunciation([FromForm] string text)
+        [RequestSizeLimit(20_000_000)] // emniyet; istersen artır
+        public async Task<IActionResult> CheckPronunciation(
+            [FromForm(Name = "audio_file")] IFormFile audioFile,
+            [FromForm] string text)
         {
             Console.WriteLine($"[PRON] Request arrived | text='{text}'");
 
+            if (audioFile == null || audioFile.Length == 0)
+                return BadRequest("Ses dosyası yok (audio_file).");
+
+            if (string.IsNullOrWhiteSpace(text))
+                return BadRequest("Text alanı boş.");
+
+            Console.WriteLine($"[PRON] Incoming file: name='{audioFile.FileName}' len={audioFile.Length} ct='{audioFile.ContentType}'");
+
+            // Dosyayı byte[] al (FluentMe tarafında stream/multipart hassasiyetlerini azaltır)
+            byte[] wavBytes;
+            await using (var ms = new MemoryStream())
+            {
+                await audioFile.CopyToAsync(ms);
+                wavBytes = ms.ToArray();
+            }
+
+            // Basit WAV doğrulama: "RIFF"
+            if (wavBytes.Length < 12 ||
+                wavBytes[0] != (byte)'R' || wavBytes[1] != (byte)'I' || wavBytes[2] != (byte)'F' || wavBytes[3] != (byte)'F')
+            {
+                return BadRequest("Gönderilen dosya WAV (RIFF) görünmüyor.");
+            }
+
+            var client = _httpClientFactory.CreateClient();
+
             try
             {
-                // FORM'u oku ve debug log bas
-                var form = await Request.ReadFormAsync();
-
-                Console.WriteLine($"[PRON] Form keys: {string.Join(", ", form.Keys)}");
-                Console.WriteLine($"[PRON] Files count: {form.Files.Count}");
-                foreach (var f in form.Files)
-                    Console.WriteLine($"[PRON] File field='{f.Name}' filename='{f.FileName}' len={f.Length} ct='{f.ContentType}'");
-
-                // Unity bazen audio_file bazen audioFile gönderebilir: ikisini de kabul et
-                IFormFile audioFile =
-                    form.Files.GetFile("audio_file") ??
-                    form.Files.GetFile("audioFile") ??
-                    form.Files.FirstOrDefault();
-
-                if (audioFile == null || audioFile.Length == 0)
-                    return BadRequest(new { message = "Ses dosyası yok. Beklenen alan: audio_file veya audioFile." });
-
-                if (string.IsNullOrWhiteSpace(text))
-                    return BadRequest(new { message = "Text alanı boş." });
-
-                var client = _httpClientFactory.CreateClient();
-
-                // 1) TOKEN
-                string token = await GetValidToken(client);
+                // 1) TOKEN AL
+                var token = await GetValidToken(client);
                 Console.WriteLine("[PRON] Token OK.");
 
-                // 2) POST oluştur
+                // 2) POST OLUŞTUR
                 var postContent = new
                 {
                     post_title = "Unity Kaydı",
@@ -68,54 +77,78 @@ namespace DktApi.Controllers
                 };
 
                 using var postReq = new HttpRequestMessage(HttpMethod.Post, "https://thefluent.me/api/swagger/post");
+                postReq.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
                 postReq.Headers.Add("x-access-token", token);
+
+                // Bazı kurulumlarda post/score da x-api-key istiyor
+                postReq.Headers.Add("x-api-key", HARDCODED_KEY);
+
                 postReq.Content = JsonContent.Create(postContent);
 
                 Console.WriteLine("[PRON] Creating post...");
                 var postResp = await client.SendAsync(postReq);
-                var postRespStr = await postResp.Content.ReadAsStringAsync();
-                Console.WriteLine($"[PRON] Post resp status={(int)postResp.StatusCode} body={postRespStr}");
+                var postBody = await postResp.Content.ReadAsStringAsync();
+
+                Console.WriteLine($"[PRON] Post resp status={(int)postResp.StatusCode} body={postBody}");
 
                 if (!postResp.IsSuccessStatusCode)
                 {
-                    if (postResp.StatusCode == System.Net.HttpStatusCode.Unauthorized) _cachedToken = null;
-                    return StatusCode((int)postResp.StatusCode, "Post Hatası: " + postRespStr);
+                    if (postResp.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                        _cachedToken = null;
+
+                    return StatusCode((int)postResp.StatusCode, "Post Hatası: " + postBody);
                 }
 
                 var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                var postObj = JsonSerializer.Deserialize<CreatePostResponse>(postRespStr, options);
-                var postId = postObj?.post_id;
+                var postObj = JsonSerializer.Deserialize<CreatePostResponse>(postBody, options);
 
+                var postId = postObj?.post_id;
                 if (string.IsNullOrWhiteSpace(postId))
-                    return StatusCode(500, "Post ID alınamadı (post_id boş). Post response: " + postRespStr);
+                    return StatusCode(500, "Post ID alınamadı. Post response: " + postBody);
 
                 Console.WriteLine($"[PRON] Post ID OK: {postId}");
 
-                // 3) SCORE isteği (multipart + token)
+                // 3) SCORE: multipart/form-data
                 using var multipart = new MultipartFormDataContent();
 
-                await using var stream = audioFile.OpenReadStream();
-                var fileContent = new StreamContent(stream);
-                fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse("audio/wav");
+                // Part 1: audio_file (tırnaklı disposition ile)
+                var part1 = new ByteArrayContent(wavBytes);
+                part1.Headers.ContentType = MediaTypeHeaderValue.Parse("audio/wav");
+                part1.Headers.ContentDisposition = new ContentDispositionHeaderValue("form-data")
+                {
+                    Name = "\"audio_file\"",
+                    FileName = "\"recording.wav\""
+                };
+                multipart.Add(part1);
 
-                multipart.Add(fileContent, "audio_file", "recording.wav");
+                // Part 2: audioFile (bazı swagger jenerasyonları camelCase bekliyor)
+                var part2 = new ByteArrayContent(wavBytes);
+                part2.Headers.ContentType = MediaTypeHeaderValue.Parse("audio/wav");
+                part2.Headers.ContentDisposition = new ContentDispositionHeaderValue("form-data")
+                {
+                    Name = "\"audioFile\"",
+                    FileName = "\"recording.wav\""
+                };
+                multipart.Add(part2);
 
                 using var scoreReq = new HttpRequestMessage(HttpMethod.Post, $"https://thefluent.me/api/swagger/score/{postId}");
                 scoreReq.Headers.Add("x-access-token", token);
+                scoreReq.Headers.Add("x-api-key", HARDCODED_KEY);
                 scoreReq.Content = multipart;
 
                 Console.WriteLine("[PRON] Sending audio for scoring...");
                 var scoreResp = await client.SendAsync(scoreReq);
-                var scoreStr = await scoreResp.Content.ReadAsStringAsync();
-                Console.WriteLine($"[PRON] Score resp status={(int)scoreResp.StatusCode} body={scoreStr}");
+                var scoreBody = await scoreResp.Content.ReadAsStringAsync();
+
+                Console.WriteLine($"[PRON] Score resp status={(int)scoreResp.StatusCode} body={scoreBody}");
 
                 if (scoreResp.IsSuccessStatusCode)
-                    return Ok(scoreStr);
+                    return Ok(scoreBody);
 
                 if (scoreResp.StatusCode == System.Net.HttpStatusCode.Unauthorized)
                     _cachedToken = null;
 
-                return StatusCode((int)scoreResp.StatusCode, "Puanlama Hatası: " + scoreStr);
+                return StatusCode((int)scoreResp.StatusCode, "Puanlama Hatası: " + scoreBody);
             }
             catch (Exception ex)
             {
@@ -135,6 +168,7 @@ namespace DktApi.Controllers
             var loginData = new { username = HARDCODED_USER, password = HARDCODED_PASS };
 
             using var loginReq = new HttpRequestMessage(HttpMethod.Post, "https://thefluent.me/api/swagger/login");
+            loginReq.Headers.Add("x-api-key", HARDCODED_KEY); // bazı kurulumlar burada da istiyor
             loginReq.Content = JsonContent.Create(loginData);
 
             var response = await client.SendAsync(loginReq);
@@ -160,22 +194,21 @@ namespace DktApi.Controllers
             if (!response.IsSuccessStatusCode)
                 throw new Exception($"Login Başarısız! Hata: {respStr}");
 
-            using (var doc = JsonDocument.Parse(respStr))
+            using var doc = JsonDocument.Parse(respStr);
+
+            if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+                doc.RootElement.TryGetProperty("token", out var t) &&
+                t.ValueKind == JsonValueKind.String)
             {
-                if (doc.RootElement.ValueKind == JsonValueKind.Object &&
-                    doc.RootElement.TryGetProperty("token", out var t) &&
-                    t.ValueKind == JsonValueKind.String)
-                {
-                    _cachedToken = t.GetString();
-                }
-                else if (doc.RootElement.ValueKind == JsonValueKind.String)
-                {
-                    _cachedToken = doc.RootElement.GetString();
-                }
-                else
-                {
-                    throw new Exception("Token alınamadı. Beklenmeyen login response formatı: " + respStr);
-                }
+                _cachedToken = t.GetString();
+            }
+            else if (doc.RootElement.ValueKind == JsonValueKind.String)
+            {
+                _cachedToken = doc.RootElement.GetString();
+            }
+            else
+            {
+                throw new Exception("Token alınamadı. Beklenmeyen login response: " + respStr);
             }
 
             if (string.IsNullOrWhiteSpace(_cachedToken))
@@ -184,10 +217,10 @@ namespace DktApi.Controllers
             _tokenExpiry = DateTime.Now.AddMinutes(50);
             return _cachedToken;
         }
-    }
 
-    public class CreatePostResponse
-    {
-        public string post_id { get; set; }
+        public class CreatePostResponse
+        {
+            public string post_id { get; set; }
+        }
     }
 }
