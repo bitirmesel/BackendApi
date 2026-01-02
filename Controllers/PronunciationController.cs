@@ -174,55 +174,31 @@ namespace DktApi.Controllers
         // Token
         // -------------------------
         private async Task<string> GetValidToken(HttpClient client)
-        {
-            if (!string.IsNullOrEmpty(_cachedToken) && DateTime.Now < _tokenExpiry)
-                return _cachedToken;
+{
+    if (!string.IsNullOrEmpty(_cachedToken) && DateTime.Now < _tokenExpiry)
+        return _cachedToken;
 
-            Console.WriteLine("[PRON] Login attempt...");
+    var authBytes = Encoding.ASCII.GetBytes($"{HARDCODED_USER}:{HARDCODED_PASS}");
+    var authString = Convert.ToBase64String(authBytes);
 
-            // POST login (explicit)
-            var loginJson = JsonSerializer.Serialize(new
-            {
-                username = HARDCODED_USER,
-                password = HARDCODED_PASS
-            });
+    using var req = new HttpRequestMessage(HttpMethod.Get, FLUENT_LOGIN);
+    req.Headers.Authorization = new AuthenticationHeaderValue("Basic", authString);
+    req.Headers.Add("x-api-key", HARDCODED_KEY);
+    req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-            using var loginReq = new HttpRequestMessage(HttpMethod.Post, FLUENT_LOGIN);
-            loginReq.Headers.Add("x-api-key", HARDCODED_KEY);
-            loginReq.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            loginReq.Content = new StringContent(loginJson, Encoding.UTF8, "application/json");
+    var resp = await client.SendAsync(req);
+    var body = await resp.Content.ReadAsStringAsync();
 
-            var resp = await client.SendAsync(loginReq);
-            var body = await resp.Content.ReadAsStringAsync();
+    if (!resp.IsSuccessStatusCode)
+        throw new Exception("Login failed: " + body);
 
-            Console.WriteLine($"[PRON] Login status={(int)resp.StatusCode} body={body}");
+    using var doc = JsonDocument.Parse(body);
+    _cachedToken = doc.RootElement.GetProperty("token").GetString();
 
-            if (!resp.IsSuccessStatusCode)
-                throw new Exception("Login Başarısız: " + body);
+    _tokenExpiry = DateTime.Now.AddMinutes(50);
+    return _cachedToken;
+}
 
-            using var doc = JsonDocument.Parse(body);
-
-            if (doc.RootElement.ValueKind == JsonValueKind.Object &&
-                doc.RootElement.TryGetProperty("token", out var t) &&
-                t.ValueKind == JsonValueKind.String)
-            {
-                _cachedToken = t.GetString();
-            }
-            else if (doc.RootElement.ValueKind == JsonValueKind.String)
-            {
-                _cachedToken = doc.RootElement.GetString();
-            }
-            else
-            {
-                throw new Exception("Token alınamadı. Login response: " + body);
-            }
-
-            if (string.IsNullOrWhiteSpace(_cachedToken))
-                throw new Exception("Token boş geldi.");
-
-            _tokenExpiry = DateTime.Now.AddMinutes(50);
-            return _cachedToken;
-        }
     }
 
     public class CreatePostResponse
