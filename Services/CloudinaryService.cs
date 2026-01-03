@@ -1,6 +1,8 @@
 // Services/CloudinaryService.cs
 using CloudinaryDotNet;
 using CloudinaryDotNet.Actions;
+using System.IO;
+
 
 namespace DktApi.Services;
 
@@ -31,7 +33,7 @@ public class CloudinaryService
             throw new ArgumentException("Dosya boş olamaz");
 
         using var stream = file.OpenReadStream();
-        
+
         var uploadParams = new ImageUploadParams
         {
             File = new FileDescription(file.FileName, stream),
@@ -44,4 +46,48 @@ public class CloudinaryService
         // Yüklenen resmin güvenli (https) linkini döndür
         return uploadResult.SecureUrl.ToString();
     }
+
+
+    private readonly Cloudinary _cloudinary;
+
+    // ✅ EKLE: WAV byte[] -> Cloudinary public URL
+    public async Task<string> UploadAudioAsync(byte[] wavBytes, string fileName)
+    {
+        using var ms = new MemoryStream(wavBytes);
+
+        var uploadParams = new RawUploadParams
+        {
+            File = new FileDescription(fileName, ms),
+            Folder = "pronunciation",
+            UseFilename = true,
+            UniqueFilename = true,
+            Overwrite = false
+        };
+
+        var result = await _cloudinary.UploadAsync(uploadParams);
+
+        if (result.StatusCode != HttpStatusCode.OK && result.StatusCode != HttpStatusCode.Created)
+            throw new Exception("Cloudinary audio upload failed: " + result.Error?.Message);
+
+        return result.SecureUrl.ToString(); // ✅ FluentMe’ye bunu vereceğiz
+    }
+
+
+
+public async Task<string> UploadWavAsync(byte[] wavBytes)
+{
+    using var ms = new MemoryStream(wavBytes);
+
+    // Cloudinary'de ses dosyaları "raw" upload edilir
+    var uploadParams = new RawUploadParams
+    {
+        File = new FileDescription("recording.wav", ms),
+        Folder = "pronunciation_wavs"
+    };
+
+    var uploadResult = await _cloudinary.UploadAsync(uploadParams);
+
+    return uploadResult.SecureUrl.ToString();
+}
+
 }

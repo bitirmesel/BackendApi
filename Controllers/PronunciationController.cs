@@ -6,9 +6,11 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
+
 // NAudio
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
+
 
 namespace DktApi.Controllers
 {
@@ -24,6 +26,14 @@ namespace DktApi.Controllers
 
         private static string? _cachedToken;
         private static DateTime _tokenExpiry = DateTime.MinValue;
+
+        private readonly CloudinaryService _cloudinary;
+
+        public PronunciationController(IHttpClientFactory httpClientFactory, CloudinaryService cloudinary)
+        {
+            _httpClientFactory = httpClientFactory;
+            _cloudinary = cloudinary;
+        }
 
         private const string FLUENT_LOGIN = "https://thefluent.me/api/swagger/login";
         private const string FLUENT_POST = "https://thefluent.me/api/swagger/post";
@@ -86,6 +96,16 @@ namespace DktApi.Controllers
                 // 3) WAV normalize: 16kHz mono PCM16 WAV
                 var normalizedWav = ConvertTo16kMonoPcm16(inputBytes);
 
+                var audioUrl = await _cloudinaryService.UploadWavAsync(normalizedWav);
+                Console.WriteLine("[PRON] Uploaded WAV URL: " + audioUrl);
+
+                // 4) SCORE'u URL ile gönder
+                var scoreJson = await SendScoreToFluentMeByUrl(client, token, postId, audioUrl);
+
+                // FluentMe score JSON'unu aynen dön
+                return Content(scoreJson, "application/json");
+
+
                 // debug info
                 var inputInfo = ReadWavInfoSafe(inputBytes);
                 var normInfo = ReadWavInfoSafe(normalizedWav);
@@ -95,7 +115,9 @@ namespace DktApi.Controllers
 
                 // 4) SCORE gönder (WAV)
                 // Fluent tarafında field adı bazen "audio_file", bazen "audioFile" olabiliyor.
+                //var scoreRes = await SendScoreWavWithDualField(client, token, postId, normalizedWav);
                 var scoreRes = await SendScoreWavWithDualField(client, token, postId, normalizedWav);
+
 
                 if (!scoreRes.isSuccess)
                 {
@@ -126,32 +148,70 @@ namespace DktApi.Controllers
         // -------------------------
         // SCORE (WAV) - dual field name
         // -------------------------
+        /*  private async Task<(bool isSuccess, HttpStatusCode? status, string body)>
+             SendScoreWavWithDualField(HttpClient client, string token, string postId, byte[] wavBytes)
+         {
+             using var multipart = new MultipartFormDataContent();
+
+             // Part-1: audio_file
+             var file1 = new ByteArrayContent(wavBytes);
+             file1.Headers.ContentType = new MediaTypeHeaderValue("audio/wav");
+             multipart.Add(file1, "audio_file", "recording.wav");
+
+             // Part-2: audioFile (bazı backend’ler böyle bekliyor)
+             var file2 = new ByteArrayContent(wavBytes);
+             file2.Headers.ContentType = new MediaTypeHeaderValue("audio/wav");
+             multipart.Add(file2, "audioFile", "recording.wav");
+
+             using var req = new HttpRequestMessage(HttpMethod.Post, FLUENT_SCORE + postId);
+             req.Headers.Add("x-access-token", token);
+             req.Headers.Add("x-api-key", HARDCODED_KEY);
+             req.Headers.Accept.Clear();
+             req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+             req.Content = multipart;
+
+             var resp = await client.SendAsync(req);
+             var body = await resp.Content.ReadAsStringAsync();
+
+             Console.WriteLine($"[PRON] SCORE status={(int)resp.StatusCode} body={body}");
+
+             if (!resp.IsSuccessStatusCode)
+             {
+                 if (resp.StatusCode == HttpStatusCode.Unauthorized) _cachedToken = null;
+                 return (false, resp.StatusCode, body);
+             }
+
+             return (true, resp.StatusCode, body);
+         } */
+
+        // Controllers/PronunciationController.cs içinde
+        // SendScoreWavWithDualField yerine:
+
         private async Task<(bool isSuccess, HttpStatusCode? status, string body)>
-            SendScoreWavWithDualField(HttpClient client, string token, string postId, byte[] wavBytes)
+            SendScoreWavSingleField(HttpClient client, string token, string postId, byte[] wavBytes, string fieldName)
         {
             using var multipart = new MultipartFormDataContent();
 
-            // Part-1: audio_file
-            var file1 = new ByteArrayContent(wavBytes);
-            file1.Headers.ContentType = new MediaTypeHeaderValue("audio/wav");
-            multipart.Add(file1, "audio_file", "recording.wav");
+            var file = new ByteArrayContent(wavBytes);
 
-            // Part-2: audioFile (bazı backend’ler böyle bekliyor)
-            var file2 = new ByteArrayContent(wavBytes);
-            file2.Headers.ContentType = new MediaTypeHeaderValue("audio/wav");
-            multipart.Add(file2, "audioFile", "recording.wav");
+            // Bazı sistemler audio/wav yerine audio/x-wav bekleyebiliyor
+            file.Headers.ContentType = new MediaTypeHeaderValue("audio/x-wav");
+
+            multipart.Add(file, fieldName, "recording.wav");
 
             using var req = new HttpRequestMessage(HttpMethod.Post, FLUENT_SCORE + postId);
             req.Headers.Add("x-access-token", token);
             req.Headers.Add("x-api-key", HARDCODED_KEY);
+
             req.Headers.Accept.Clear();
             req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
             req.Content = multipart;
 
             var resp = await client.SendAsync(req);
             var body = await resp.Content.ReadAsStringAsync();
 
-            Console.WriteLine($"[PRON] SCORE status={(int)resp.StatusCode} body={body}");
+            Console.WriteLine($"[PRON] SCORE field='{fieldName}' status={(int)resp.StatusCode} body={body}");
 
             if (!resp.IsSuccessStatusCode)
             {
@@ -161,6 +221,51 @@ namespace DktApi.Controllers
 
             return (true, resp.StatusCode, body);
         }
+
+        private async Task<(bool isSuccess, HttpStatusCode? status, string body)>
+            SendScoreWavWithFieldFallback(HttpClient client, string token, string postId, byte[] wavBytes)
+        {
+            // 1) Önce audio_file dene
+            var r1 = await SendScoreWavSingleField(client, token, postId, wavBytes, "audio_file");
+            if (r1.isSuccess) return r1;
+
+            // 2) Olmazsa audioFile ile tekrar dene (AYNI REQUEST DEĞİL)
+            var r2 = await SendScoreWavSingleField(client, token, postId, wavBytes, "audioFile");
+            return r2;
+        }
+
+
+
+        // PronunciationController class'ının içine ekle (private methodlar bölümüne)
+
+        private async Task<string> SendScoreToFluentMeByUrl(HttpClient client, string token, string postId, string audioUrl)
+        {
+            // SENDE ZATEN: private const string FLUENT_SCORE = "https://thefluent.me/api/swagger/score/"; // + {postId}
+            // Bu yüzden şöyle birleştiriyoruz:
+            var url = $"{FLUENT_SCORE}{postId}?scale=100";
+
+            using var req = new HttpRequestMessage(HttpMethod.Post, url);
+
+            req.Headers.Accept.Clear();
+            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            req.Headers.Add("x-access-token", token);
+            req.Headers.Add("x-api-key", HARDCODED_KEY);
+
+            var bodyJson = JsonSerializer.Serialize(new { audio_provided = audioUrl });
+            req.Content = new StringContent(bodyJson, Encoding.UTF8, "application/json");
+
+            using var resp = await client.SendAsync(req);
+            var respBody = await resp.Content.ReadAsStringAsync();
+
+            Console.WriteLine($"[PRON] SCORE(URL) status={(int)resp.StatusCode} body={respBody}");
+
+            if (!resp.IsSuccessStatusCode)
+                throw new Exception($"FluentMe score failed: {(int)resp.StatusCode} - {respBody}");
+
+            return respBody;
+        }
+
+
 
         // -------------------------
         // FluentMe: Create Post
