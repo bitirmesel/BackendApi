@@ -57,8 +57,8 @@ public class CloudinaryService
         {
             File = new FileDescription(fileName, ms),
             Folder = "pronunciation",
-            UseFilename = true,
-            UniqueFilename = true,
+            // Linkin sonuna .wav ekleyerek FluentMe'nin dosyayı tanımasını sağlıyoruz
+            PublicId = $"audio_{DateTime.Now.Ticks}.wav",
             Overwrite = false
         };
 
