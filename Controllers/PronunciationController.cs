@@ -91,9 +91,14 @@ namespace DktApi.Controllers
                 // 3) WAV normalize: 16kHz mono PCM16 WAV
                 var normalizedWav = ConvertTo16kMonoPcm16(inputBytes);
 
-                // Cloudinary'ye yükle (Değişken ismini düzelttim)
+                // Cloudinary'ye yükle
                 var audioUrl = await _cloudinary.UploadAudioAsync(normalizedWav, "recording.wav");
                 Console.WriteLine("[PRON] Uploaded WAV URL: " + audioUrl);
+
+                // --- GÜNCELLEME: DOSYA ERİŞİLEBİLİRLİĞİ İÇİN BEKLEME ---
+                // Cloudinary linki oluşturduktan sonra FluentMe'nin dosyayı okuyabilmesi 
+                // için 1 saniye (1000ms) bekliyoruz.
+                await Task.Delay(1000); 
 
                 // 4) SCORE'u URL ile gönder
                 var scoreJson = await SendScoreToFluentMeByUrl(client, token, postId, audioUrl);
