@@ -2,6 +2,7 @@ using Newtonsoft.Json;
 using DktApi.Dtos;
 using DktApi.Repositories;
 using DktApi.DTOs.Game;
+using DktApi.Dtos.Game;
 
 namespace DktApi.Services
 {
@@ -28,7 +29,7 @@ namespace DktApi.Services
 
             try
             {
-                return JsonConvert.DeserializeObject<GameAssetConfigDto>(assetSet.AssetJson);
+                return JsonConvert.DeserializeObject<GameAssetConfig>(assetSet.AssetJson);
             }
             catch
             {
