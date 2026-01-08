@@ -1,9 +1,11 @@
+using System;
 using System.Collections.Generic;
-using Newtonsoft.Json; // Eğer yoksa: dotnet add package Newtonsoft.Json
+using Newtonsoft.Json;
 
-namespace DktApi.DTOs.Game
+namespace GraduationProject.Models
 {
-    public class GameAssetConfigDto
+    [Serializable]
+    public class GameAssetConfig
     {
         [JsonProperty("config_id")]
         public string ConfigId { get; set; }
@@ -11,17 +13,18 @@ namespace DktApi.DTOs.Game
         [JsonProperty("base_url")]
         public string BaseUrl { get; set; }
 
+        // DÜZELTME: Backend 'items' yolluyor, biz de 'Items' diyoruz.
         [JsonProperty("items")]
-        public List<AssetItemDto> Items { get; set; }
+        public List<AssetItem> Items { get; set; } 
     }
 
-    public class AssetItemDto
+    [Serializable]
+    public class AssetItem
     {
         [JsonProperty("key")]
-        public string Key { get; set; }   // Örn: "kedi"
+        public string Key { get; set; }
 
         [JsonProperty("file")]
-        public string File { get; set; }  // Örn: "kedi.png"
+        public string File { get; set; }
     }
-
 }
