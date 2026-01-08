@@ -2,10 +2,11 @@ using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 
-namespace GraduationProject.Models
+// Namespace'i servisinizin 'using' listesindeki ile eşitledik
+namespace DktApi.Dtos.Game 
 {
     [Serializable]
-    public class GameAssetConfig
+    public class GameAssetConfigDto // İSMİ DEĞİŞTİ (Sonuna Dto geldi)
     {
         [JsonProperty("config_id")]
         public string ConfigId { get; set; }
@@ -13,13 +14,12 @@ namespace GraduationProject.Models
         [JsonProperty("base_url")]
         public string BaseUrl { get; set; }
 
-        // DÜZELTME: Backend 'items' yolluyor, biz de 'Items' diyoruz.
         [JsonProperty("items")]
-        public List<AssetItem> Items { get; set; } 
+        public List<AssetItemDto> Items { get; set; } 
     }
 
     [Serializable]
-    public class AssetItem
+    public class AssetItemDto // Alt sınıfı da isimlendirme standardına uydurduk
     {
         [JsonProperty("key")]
         public string Key { get; set; }
