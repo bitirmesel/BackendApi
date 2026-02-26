@@ -10,9 +10,10 @@ public class FinishGameSessionReq
     [Required]
     public int Score { get; set; }
     
-    // DB'deki max_score alanı için (Eğer frontend gönderiyorsa)
     public int? MaxScore { get; set; } 
     
-    // Oturumun süresi (DB'de duration_sec int)
     public int? DurationSec { get; set; }
+
+    // --- ANALİZ İÇİN EKLE ---
+    public string? TargetWord { get; set; } // Hangi kelime çalışıldı? (Örn: "kedi")
 }
