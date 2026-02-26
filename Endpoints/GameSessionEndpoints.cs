@@ -114,5 +114,16 @@ public static class GameSessionEndpoints
             return Results.Ok();
         });
 
+        // Endpoints/GameSessionEndpoints.cs içine eklenebilir
+        app.MapGet("/api/gamesessions/all", async (AppDbContext db) =>
+        {
+            var sessions = await db.GameSessions
+                .OrderByDescending(s => s.FinishedAt)
+                .ToListAsync();
+            return Results.Ok(sessions);
+        })
+        .WithTags("GameSessions")
+        .WithName("GetAllSessionsDebug");
+
     }
 }
