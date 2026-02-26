@@ -1,27 +1,33 @@
 using System.Collections.Generic;
-using Newtonsoft.Json; // Eğer yoksa: dotnet add package Newtonsoft.Json
+using Newtonsoft.Json;
 
-namespace DktApi.DTOs.Game
+namespace GraduationProject.Models
 {
-    public class GameAssetConfigDto
+    [System.Serializable]
+    public class GameAssetConfig
     {
-        [JsonProperty("config_id")]
+        [JsonProperty("configId")]
         public string ConfigId { get; set; }
 
-        [JsonProperty("base_url")]
+        [JsonProperty("baseUrl")]
         public string BaseUrl { get; set; }
 
         [JsonProperty("items")]
-        public List<AssetItemDto> Items { get; set; }
+        public List<AssetItem> Items { get; set; }
+
+        // --- EKSİK OLAN KISIM BURASIYDI ---
+        // Bu satırı eklemezsen APIManager hata verir!
+        [JsonProperty("assetJson")] 
+        public string AssetJson { get; set; }
     }
 
-    public class AssetItemDto
+    [System.Serializable]
+    public class AssetItem
     {
         [JsonProperty("key")]
-        public string Key { get; set; }   // Örn: "kedi"
+        public string Key { get; set; }
 
         [JsonProperty("file")]
-        public string File { get; set; }  // Örn: "kedi.png"
+        public string File { get; set; }
     }
-
 }

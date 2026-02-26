@@ -1,7 +1,6 @@
 using Newtonsoft.Json;
-using DktApi.Dtos;
 using DktApi.Repositories;
-using DktApi.DTOs.Game;
+using DktApi.Dtos.Game; // Yukarıda oluşturduğumuz namespace buraya denk gelmeli
 
 namespace DktApi.Services
 {
@@ -28,6 +27,7 @@ namespace DktApi.Services
 
             try
             {
+                // DÜZELTME: Artık GameAssetConfigDto tipine deserialize ediyoruz
                 return JsonConvert.DeserializeObject<GameAssetConfigDto>(assetSet.AssetJson);
             }
             catch
