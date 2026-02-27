@@ -90,34 +90,23 @@ public static class GameSessionEndpoints
 
         app.MapPost("/api/gamesessions/finish", async (FinishGameSessionReq req, AppDbContext db) =>
 {
-    // Mevcut satırı ARATMIYORUZ (FindAsync yapmıyoruz). 
-    // Gelen her isteği yeni bir GameSession satırı olarak ekliyoruz.
-
-    var newRecord = new GameSession
+    // Mevcut kaydı aramıyoruz, DOĞRUDAN yeni bir kayıt oluşturuyoruz
+    var newEntry = new GameSession
     {
-        PlayerId = req.PlayerId, // İstek modeline PlayerId eklemelisin veya GameContext'ten almalısın
+        PlayerId = req.PlayerId,
         GameId = req.GameId,
         LetterId = req.LetterId,
-        AssetSetId = req.SessionId, // Eski sessionId'yi 'Grup ID'si' gibi kullanabiliriz
+        AssetSetId = 1, // Grup ID olarak 1 kullanabilirsin
         Score = req.Score,
-        TargetWord = req.TargetWord, // "Kedi", "Köpek" bilgisi
-        FinishedAt = DateTime.UtcNow,
-        StartedAt = DateTime.UtcNow, // Anlık kayıt olduğu için ikisi aynı olabilir
-        MaxScore = 100
+        TargetWord = req.TargetWord, // Buraya kedi, köpek vb. gelecek
+        MaxScore = 100,
+        StartedAt = DateTime.UtcNow,
+        FinishedAt = DateTime.UtcNow
     };
 
-    db.GameSessions.Add(newRecord); // UPDATE yerine ADD yapıyoruz
-
-    // Oyuncunun toplam puanını güncelleme kısmı
-    var player = await db.Players.FindAsync(req.PlayerId);
-    if (player != null)
-    {
-        player.TotalScore ??= 0;
-        player.TotalScore += req.Score;
-    }
-
+    db.GameSessions.Add(newEntry);
     await db.SaveChangesAsync();
-    return Results.Ok();
+    return Results.Ok(new { message = "Skor kaydedildi", id = newEntry.Id });
 });
 
         // Endpoints/GameSessionEndpoints.cs içine eklenebilir
@@ -130,7 +119,7 @@ public static class GameSessionEndpoints
         })
         .WithTags("GameSessions")
         .WithName("GetAllSessionsDebug");
-        
+
 
         // Tüm kayıtları silmek için (Postman: DELETE /api/gamesessions/clear-all)
         app.MapDelete("/api/gamesessions/clear-all", async (AppDbContext db) =>
