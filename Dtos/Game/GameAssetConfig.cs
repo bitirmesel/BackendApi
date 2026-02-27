@@ -6,13 +6,13 @@ namespace GraduationProject.Models
     [System.Serializable]
     public class GameAssetConfig
     {
-        [JsonProperty("configId")]
+        [JsonProperty("config_id")]
         public string ConfigId { get; set; }
 
-        [JsonProperty("baseUrl")]
+        [JsonProperty("base_url")]
         public string BaseUrl { get; set; }
 
-        [JsonProperty("audioBaseUrl")]
+        [JsonProperty("audio_base_url")]
         public string? AudioBaseUrl { get; set; }
 
         [JsonProperty("items")]
@@ -20,7 +20,7 @@ namespace GraduationProject.Models
 
         // --- EKSİK OLAN KISIM BURASIYDI ---
         // Bu satırı eklemezsen APIManager hata verir!
-        [JsonProperty("assetJson")] 
+        [JsonProperty("asset_json")] 
         public string AssetJson { get; set; }
     }
 
