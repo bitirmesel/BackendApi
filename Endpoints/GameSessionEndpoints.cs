@@ -89,30 +89,36 @@ public static class GameSessionEndpoints
         */
 
         app.MapPost("/api/gamesessions/finish", async (FinishGameSessionReq req, AppDbContext db) =>
-        {
-            var session = await db.GameSessions.FindAsync(req.SessionId);
-            if (session is null) return Results.NotFound();
+{
+    // Mevcut satırı ARATMIYORUZ (FindAsync yapmıyoruz). 
+    // Gelen her isteği yeni bir GameSession satırı olarak ekliyoruz.
 
-            session.FinishedAt = DateTime.UtcNow;
-            session.Score = req.Score;
+    var newRecord = new GameSession
+    {
+        PlayerId = req.PlayerId, // İstek modeline PlayerId eklemelisin veya GameContext'ten almalısın
+        GameId = req.GameId,
+        LetterId = req.LetterId,
+        AssetSetId = req.SessionId, // Eski sessionId'yi 'Grup ID'si' gibi kullanabiliriz
+        Score = req.Score,
+        TargetWord = req.TargetWord, // "Kedi", "Köpek" bilgisi
+        FinishedAt = DateTime.UtcNow,
+        StartedAt = DateTime.UtcNow, // Anlık kayıt olduğu için ikisi aynı olabilir
+        MaxScore = 100
+    };
 
-            if (req.MaxScore.HasValue)
-                session.MaxScore = req.MaxScore.Value;
+    db.GameSessions.Add(newRecord); // UPDATE yerine ADD yapıyoruz
 
-            if (req.DurationSec.HasValue)
-                session.DurationSec = req.DurationSec.Value;
+    // Oyuncunun toplam puanını güncelleme kısmı
+    var player = await db.Players.FindAsync(req.PlayerId);
+    if (player != null)
+    {
+        player.TotalScore ??= 0;
+        player.TotalScore += req.Score;
+    }
 
-            var player = await db.Players.FindAsync(session.PlayerId);
-            if (player is not null)
-            {
-                player.TotalScore ??= 0;
-                player.TotalScore += req.Score;
-                player.LastLogin = DateTime.UtcNow;
-            }
-
-            await db.SaveChangesAsync();
-            return Results.Ok();
-        });
+    await db.SaveChangesAsync();
+    return Results.Ok();
+});
 
         // Endpoints/GameSessionEndpoints.cs içine eklenebilir
         app.MapGet("/api/gamesessions/all", async (AppDbContext db) =>
@@ -124,6 +130,20 @@ public static class GameSessionEndpoints
         })
         .WithTags("GameSessions")
         .WithName("GetAllSessionsDebug");
+        
+
+        // Tüm kayıtları silmek için (Postman: DELETE /api/gamesessions/clear-all)
+        app.MapDelete("/api/gamesessions/clear-all", async (AppDbContext db) =>
+        {
+            // Veritabanındaki tüm GameSessions kayıtlarını seçer ve temizler
+            var allSessions = await db.GameSessions.ToListAsync();
+            db.GameSessions.RemoveRange(allSessions);
+
+            await db.SaveChangesAsync();
+            return Results.Ok(new { message = "Tüm oyun kayıtları başarıyla silindi." });
+        })
+        .WithTags("GameSessions");
 
     }
+
 }
