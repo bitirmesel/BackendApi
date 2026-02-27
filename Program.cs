@@ -132,6 +132,26 @@ builder.Services.AddHttpClient();
 // ----------------------------------
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var conn = db.Database.GetDbConnection();
+    try 
+    {
+        await conn.OpenAsync();
+        using var command = conn.CreateCommand();
+        // Sadece target_word sütunu yoksa ekleyen SQL komutu
+        command.CommandText = "ALTER TABLE game_sessions ADD COLUMN IF NOT EXISTS target_word TEXT;";
+        await command.ExecuteNonQueryAsync();
+        Console.WriteLine("[DB UPDATE] target_word sütunu kontrol edildi/eklendi.");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine("[DB ERROR] Sütun eklenirken hata: " + ex.Message);
+    }
+    finally { await conn.CloseAsync(); }
+}
+
 // HTTP isteklerini HTTPS'e yönlendir (Render'da bazen loop yapabilir, dikkat)
 // app.UseHttpsRedirection(); // Render zaten https veriyor, bunu şimdilik kapalı tutabilirsin hata alırsan.
 
