@@ -12,6 +12,9 @@ namespace GraduationProject.Models
         [JsonProperty("baseUrl")]
         public string BaseUrl { get; set; }
 
+        [JsonProperty("audioBaseUrl")]
+        public string? AudioBaseUrl { get; set; }
+
         [JsonProperty("items")]
         public List<AssetItem> Items { get; set; }
 
@@ -29,5 +32,8 @@ namespace GraduationProject.Models
 
         [JsonProperty("file")]
         public string File { get; set; }
+
+        [JsonProperty("audio")]
+        public string? Audio { get; set; }
     }
 }
