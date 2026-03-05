@@ -1,6 +1,7 @@
 using DktApi.Models.Db;
 using DktApi.Models.Game;
 using Microsoft.EntityFrameworkCore;
+using DktApi.Dtos.Game;
 
 namespace DktApi.Endpoints;
 
@@ -155,6 +156,30 @@ public static class GameSessionEndpoints
 
             return Results.Ok(new { message = "Geri bildirim başarıyla kaydedildi." });
         });
+
+        app.MapGet("/api/players/{playerId}/feedbacks", async (long playerId, AppDbContext db) =>
+{
+    var feedbacks = await db.Feedbacks
+        .Include(f => f.GameSession)
+        .Include(f => f.Therapist)
+        .Where(f => f.GameSession.PlayerId == playerId)
+        .OrderByDescending(f => f.CreatedAt)
+        .Select(f => new FeedbackResponseDto
+        {
+            Comment = f.Comment ?? "",
+            TargetWord = f.GameSession.TargetWord ?? "Oyun",
+            Score = f.GameSession.Score,
+            CreatedAt = f.CreatedAt ?? DateTime.UtcNow,
+            TherapistName = f.Therapist.Name ?? "Terapistiniz"
+        })
+        .Take(10) // Son 10 bildirim yeterli
+        .ToListAsync();
+
+    return Results.Ok(feedbacks);
+})
+.WithTags("Feedback");
+
+
 
     }
 
