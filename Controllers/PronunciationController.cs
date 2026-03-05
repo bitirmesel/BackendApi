@@ -32,6 +32,8 @@ namespace DktApi.Controllers
         private const string FLUENT_POST = "https://thefluent.me/api/swagger/post";
         private const string FLUENT_SCORE = "https://thefluent.me/api/swagger/score/"; // + {postId}
 
+        private static long NowMs() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
         // TEK CONSTRUCTOR
         public PronunciationController(IHttpClientFactory httpClientFactory, CloudinaryService cloudinary)
         {
@@ -42,7 +44,16 @@ namespace DktApi.Controllers
         [HttpPost("check")]
         public async Task<IActionResult> CheckPronunciation([FromForm] string text)
         {
-            Console.WriteLine($"[PRON] Request arrived | text='{text}'");
+            var requestId = Guid.NewGuid().ToString("N");
+            var requestStart = NowMs();
+
+            Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new
+            {
+                type = "PronunciationCheckStart",
+                requestId,
+                timestampMs = requestStart,
+                text
+            }));
 
             if (string.IsNullOrWhiteSpace(text))
                 return BadRequest(new { message = "Text alanı boş." });
@@ -70,15 +81,50 @@ namespace DktApi.Controllers
                 inputBytes = ms.ToArray();
             }
 
+            Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new
+            {
+                type = "PronunciationCheckRequestInfo",
+                requestId,
+                timestampMs = NowMs(),
+                audioFileLengthBytes = inputBytes.Length,
+                originalFileLengthBytes = audioFile.Length,
+                fileName = audioFile.FileName,
+                contentType = audioFile.ContentType
+            }));
+
             var client = _httpClientFactory.CreateClient();
 
             try
             {
                 // 1) Token
+                var tokenStart = NowMs();
                 var token = await GetValidToken(client);
+                var tokenEnd = NowMs();
+
+                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    type = "PronunciationCheckToken",
+                    requestId,
+                    tokenDurationMs = tokenEnd - tokenStart,
+                    timestampMs = tokenEnd,
+                    cacheHit = (tokenEnd - tokenStart) < 100
+                }));
 
                 // 2) Post oluştur
+                var postStart = NowMs();
                 var postRes = await CreatePostWithFallback(client, token, text);
+                var postEnd = NowMs();
+
+                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    type = "PronunciationCheckCreatePost",
+                    requestId,
+                    postDurationMs = postEnd - postStart,
+                    timestampMs = postEnd,
+                    isSuccess = postRes.isSuccess,
+                    status = postRes.status
+                }));
+
                 if (!postRes.isSuccess)
                 {
                     return StatusCode((int)(postRes.status ?? HttpStatusCode.BadRequest),
@@ -89,26 +135,89 @@ namespace DktApi.Controllers
                 Console.WriteLine($"[PRON] Post ID OK: {postId}");
 
                 // 3) WAV normalize: 16kHz mono PCM16 WAV
+                var decodeStart = NowMs();
                 var normalizedWav = ConvertTo16kMonoPcm16(inputBytes);
+                var decodeEnd = NowMs();
+
+                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    type = "PronunciationCheckDecode",
+                    requestId,
+                    decodeDurationMs = decodeEnd - decodeStart,
+                    timestampMs = decodeEnd
+                }));
 
                 // Cloudinary'ye yükle
+                var uploadStart = NowMs();
                 var audioUrl = await _cloudinary.UploadAudioAsync(normalizedWav, "recording.wav");
-                Console.WriteLine("[PRON] Uploaded WAV URL: " + audioUrl);
+                var uploadEnd = NowMs();
+
+                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    type = "PronunciationCheckUpload",
+                    requestId,
+                    uploadDurationMs = uploadEnd - uploadStart,
+                    timestampMs = uploadEnd,
+                    audioUrl
+                }));
 
                 // --- GÜNCELLEME: DOSYA ERİŞİLEBİLİRLİĞİ İÇİN BEKLEME ---
                 // Cloudinary linki oluşturduktan sonra FluentMe'nin dosyayı okuyabilmesi 
                 // için 1 saniye (1000ms) bekliyoruz.
+                var delayStart = NowMs();
                 await Task.Delay(1000); 
+                var delayEnd = NowMs();
+
+                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    type = "PronunciationCheckDelay",
+                    requestId,
+                    delayDurationMs = delayEnd - delayStart,
+                    timestampMs = delayEnd
+                }));
 
                 // 4) SCORE'u URL ile gönder
+                var scoreStart = NowMs();
                 var scoreJson = await SendScoreToFluentMeByUrl(client, token, postId, audioUrl);
+                var scoreEnd = NowMs();
+
+                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    type = "PronunciationCheckScore",
+                    requestId,
+                    inferenceDurationMs = scoreEnd - scoreStart,
+                    timestampMs = scoreEnd,
+                    modelName = "FluentMe-API",
+                    modelVersion = "unknown"
+                }));
 
                 // FluentMe score JSON'unu aynen dön
-                return Content(scoreJson, "application/json");
+                var formatStart = NowMs();
+                var result = Content(scoreJson, "application/json");
+                var formatEnd = NowMs();
+
+                var responseSend = formatEnd;
+                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    type = "PronunciationCheckCompleted",
+                    requestId,
+                    timestampMs = responseSend,
+                    formatDurationMs = formatEnd - formatStart,
+                    totalDurationMs = responseSend - requestStart
+                }));
+
+                return result;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[PRON][CRITICAL] {ex}");
+                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    type = "PronunciationCheckError",
+                    requestId,
+                    timestampMs = NowMs(),
+                    message = ex.Message,
+                    stackTrace = ex.ToString()
+                }));
                 return StatusCode(500, new { message = "Sunucu Hatası", detail = ex.Message });
             }
         }
