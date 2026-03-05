@@ -40,6 +40,9 @@ public class GameSession
     [Column("duration_sec")]
     public int? DurationSec { get; set; }
 
+    [Column("target_word")]
+    public string? TargetWord { get; set; }
+
     public Player Player { get; set; } = null!;
     public Game Game { get; set; } = null!;
     public Letter Letter { get; set; } = null!;

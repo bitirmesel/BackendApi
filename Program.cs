@@ -132,6 +132,8 @@ builder.Services.AddHttpClient();
 // ----------------------------------
 var app = builder.Build();
 
+
+
 // HTTP isteklerini HTTPS'e yönlendir (Render'da bazen loop yapabilir, dikkat)
 // app.UseHttpsRedirection(); // Render zaten https veriyor, bunu şimdilik kapalı tutabilirsin hata alırsan.
 
