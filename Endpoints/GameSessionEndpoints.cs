@@ -133,6 +133,31 @@ public static class GameSessionEndpoints
         })
         .WithTags("GameSessions");
 
+
+        app.MapPost("/api/gamesessions/{id}/feedback", async (long id, FeedbackReq req, AppDbContext db) =>
+        {
+            // 1. Seansın varlığını doğrula
+            var session = await db.GameSessions.FindAsync(id);
+            if (session == null) return Results.NotFound("Oyun seansı bulunamadı.");
+
+            // 2. Feedback tablosuna kaydı oluştur
+            var feedbackEntry = new DktApi.Models.Db.Feedback
+            {
+                GameSessionId = id,           // URL'den gelen {id}
+                TherapistId = req.TherapistId, // DTO'dan (Flutter'dan) gelen ID
+                Comment = req.Feedback,       // DTO'dan gelen yorum
+                CreatedAt = DateTime.UtcNow,
+                Rating = 5                    // Varsayılan puan
+            };
+
+            db.Feedbacks.Add(feedbackEntry);
+            await db.SaveChangesAsync();
+
+            return Results.Ok(new { message = "Geri bildirim başarıyla kaydedildi." });
+        });
+
     }
+
+
 
 }
