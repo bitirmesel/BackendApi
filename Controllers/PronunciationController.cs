@@ -197,6 +197,22 @@ namespace DktApi.Controllers
                 var formatEnd = NowMs();
 
                 var responseSend = formatEnd;
+
+                var timing = new
+                {
+                    requestId,
+                    tokenDurationMs = tokenEnd - tokenStart,
+                    postDurationMs = postEnd - postStart,
+                    decodeDurationMs = decodeEnd - decodeStart,
+                    uploadDurationMs = uploadEnd - uploadStart,
+                    delayDurationMs = delayEnd - delayStart,
+                    inferenceDurationMs = scoreEnd - scoreStart,
+                    formatDurationMs = formatEnd - formatStart,
+                    totalDurationMs = responseSend - requestStart
+                };
+                var timingJson = JsonSerializer.Serialize(timing);
+                Response.Headers.Append("X-Pronunciation-Timing", timingJson);
+
                 Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new
                 {
                     type = "PronunciationCheckCompleted",
