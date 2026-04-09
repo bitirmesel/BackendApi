@@ -56,20 +56,17 @@ public static class NotificationEndpoints
         // 3) BİLDİRİMİ OKUNDU İŞARETLE – PATCH /api/notifications/{id}/read
         // Unity: Ali 'Tamam' butonuna basınca bildirim silinmesin ama IsRead = true olsun.
         // ----------------------------------------------------
-        app.MapPatch("/api/notifications/{id:long}/read", async (long id, AppDbContext db) =>
+        // PATCH yerine POST yapıyoruz ki Unity zorlanmasın
+        app.MapPost("/api/notifications/{id:long}/read", async (long id, AppDbContext db) =>
         {
             var notification = await db.Notifications.FindAsync(id);
-
-            if (notification == null)
-                return Results.NotFound("Bildirim bulunamadı.");
+            if (notification == null) return Results.NotFound();
 
             notification.IsRead = true;
             await db.SaveChangesAsync();
 
-            return Results.Ok(new { message = "Bildirim okundu olarak işaretlendi." });
-        })
-        .WithTags("Notifications")
-        .WithName("MarkNotificationAsRead");
+            return Results.Ok(new { message = "Okundu işaretlendi" });
+        });
 
         // ----------------------------------------------------
         // 4) DEBUG/ADMIN: TÜM BİLDİRİMLERİ LİSTELE – GET /api/notifications
@@ -103,7 +100,7 @@ public static class NotificationEndpoints
         })
         .WithTags("Notifications")
         .WithName("GetAllNotificationsDebug");
-        
+
         // ----------------------------------------------------
         // 5) BİLDİRİM SİL – DELETE /api/notifications/{id}
         // İhtiyaç halinde tekil bildirim silme.
