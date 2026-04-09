@@ -9,6 +9,7 @@ public class FinishGameSessionReq
     public long GameId { get; set; }    // Kırmızı hatayı çözer
     public long LetterId { get; set; }  // Kırmızı hatayı çözer
     public int Score { get; set; }
+    public long? TaskId { get; set; }
     public string? TargetWord { get; set; } // "Kedi", "Köpek" bilgisi
     public int? MaxScore { get; set; }
 }

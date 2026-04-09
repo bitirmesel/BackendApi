@@ -89,25 +89,35 @@ public static class GameSessionEndpoints
         });
         */
 
-        app.MapPost("/api/gamesessions/finish", async (FinishGameSessionReq req, AppDbContext db) =>
+       app.MapPost("/api/gamesessions/finish", async (FinishGameSessionReq req, AppDbContext db) =>
 {
-    // Mevcut kaydı aramıyoruz, DOĞRUDAN yeni bir kayıt oluşturuyoruz
     var newEntry = new GameSession
     {
         PlayerId = req.PlayerId,
         GameId = req.GameId,
         LetterId = req.LetterId,
-        AssetSetId = 1, // Grup ID olarak 1 kullanabilirsin
+        TaskId = req.TaskId, // Artık hata vermeyecek
+        AssetSetId = 1, 
         Score = req.Score,
-        TargetWord = req.TargetWord, // Buraya kedi, köpek vb. gelecek
+        TargetWord = req.TargetWord, // Artık hata vermeyecek
         MaxScore = 100,
         StartedAt = DateTime.UtcNow,
         FinishedAt = DateTime.UtcNow
     };
 
     db.GameSessions.Add(newEntry);
+
+    if (req.TaskId.HasValue)
+    {
+        var task = await db.TaskItems.FindAsync(req.TaskId.Value);
+        if (task != null)
+        {
+            task.Status = "COMPLETED"; // Flutter'da listeden düşmesini sağlar
+        }
+    }
+
     await db.SaveChangesAsync();
-    return Results.Ok(new { message = "Skor kaydedildi", id = newEntry.Id });
+    return Results.Ok(new { message = "Skor kaydedildi ve görev güncellendi", id = newEntry.Id });
 });
 
         // Endpoints/GameSessionEndpoints.cs içine eklenebilir
