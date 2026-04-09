@@ -140,12 +140,13 @@ var app = builder.Build();
 // --------------------------------------------------------
 // 6. OTOMATİK MIGRATION
 // --------------------------------------------------------
+/*
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
 }
-
+*/
 // --------------------------------------------------------
 // 7. MIDDLEWARE
 // --------------------------------------------------------
@@ -169,5 +170,6 @@ app.MapLookupEndpoints();
 app.MapDashboardEndpoints();
 app.MapAssetEndpoints();
 app.MapMediaEndpoints();
+app.MapNotificationEndpoints();
 
 app.Run();

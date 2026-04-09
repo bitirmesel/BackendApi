@@ -19,6 +19,7 @@ public class AppDbContext : DbContext
     public DbSet<TaskItem> TaskItems => Set<TaskItem>();
     public DbSet<GameSession> GameSessions => Set<GameSession>();
     public DbSet<Feedback> Feedbacks => Set<Feedback>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -107,5 +108,15 @@ public class AppDbContext : DbContext
             .HasOne(f => f.GameSession)
             .WithMany(gs => gs.Feedbacks)
             .HasForeignKey(f => f.GameSessionId);
+
+        modelBuilder.Entity<Notification>()
+            .HasOne(n => n.Player)
+            .WithMany() // Player tarafında ICollection<Notification> açmadıysan boş bırakabilirsin
+            .HasForeignKey(n => n.PlayerId);
+
+        modelBuilder.Entity<Notification>()
+            .HasOne(n => n.Therapist)
+            .WithMany()
+            .HasForeignKey(n => n.TherapistId);
     }
 }
