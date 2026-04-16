@@ -51,8 +51,8 @@ public static class GameSessionEndpoints
             AppDbContext db) =>
         {
             var session = await db.GameSessions
-                .Include(gs => gs.Items)
-                .FirstOrDefaultAsync(gs => gs.Id == sessionId);
+                .Include(x => x.Items)
+                .FirstOrDefaultAsync(x => x.Id == sessionId);
 
             if (session is null)
                 return Results.NotFound("Game session bulunamadı.");
@@ -63,78 +63,85 @@ public static class GameSessionEndpoints
             session.FinishedAt = DateTime.UtcNow;
 
             if (session.Items.Any())
-            {
                 db.GameSessionItems.RemoveRange(session.Items);
-            }
 
-            var newItems = req.Items.Select(i => new GameSessionItem
-            {
-                GameSessionId = session.Id,
-                OrderNo = i.OrderNo,
-                ItemType = i.ItemType,
-                PromptText = i.PromptText,
-                Score = i.Score,
-                IsCorrect = i.IsCorrect,
-                CreatedAt = DateTime.UtcNow
-            }).ToList();
+            var items = req.Items
+                .OrderBy(x => x.OrderNo)
+                .Select(x => new GameSessionItem
+                {
+                    GameSessionId = session.Id,
+                    OrderNo = x.OrderNo,
+                    ItemType = string.IsNullOrWhiteSpace(x.ItemType) ? "WORD" : x.ItemType,
+                    PromptText = x.PromptText ?? string.Empty,
+                    Score = x.Score,
+                    IsCorrect = x.IsCorrect,
+                    CreatedAt = DateTime.UtcNow
+                })
+                .ToList();
 
-            db.GameSessionItems.AddRange(newItems);
+            if (items.Any())
+                db.GameSessionItems.AddRange(items);
 
             if (session.TaskId.HasValue)
             {
                 var task = await db.TaskItems.FindAsync(session.TaskId.Value);
-                if (task != null)
-                {
+                if (task is not null)
                     task.Status = "COMPLETED";
-                }
-            }
-
-            var player = await db.Players.FindAsync(session.PlayerId);
-            if (player != null)
-            {
-                player.TotalScore = (player.TotalScore ?? 0) + req.Score;
-                player.LastLogin = DateTime.UtcNow;
             }
 
             await db.SaveChangesAsync();
 
             return Results.Ok(new
             {
-                message = "Session tamamlandı.",
-                sessionId = session.Id,
-                itemCount = newItems.Count
+                message = "Game session tamamlandı.",
+                sessionId = session.Id
             });
         });
 
-        app.MapGet("/api/players/{playerId:long}/sessions", async (long playerId, AppDbContext db) =>
+        // Terapistin bir danışanına ait seans geçmişi
+        app.MapGet("/api/therapists/{therapistId:long}/players/{playerId:long}/game-sessions",
+            async (long therapistId, long playerId, AppDbContext db) =>
         {
+            var relationExists = await db.TherapistClients
+                .AnyAsync(tc => tc.TherapistId == therapistId && tc.PlayerId == playerId);
+
+            if (!relationExists)
+                return Results.Forbid();
+
             var sessions = await db.GameSessions
                 .AsNoTracking()
+                .Where(gs => gs.PlayerId == playerId)
                 .Include(gs => gs.Game)
                 .Include(gs => gs.Letter)
                 .Include(gs => gs.Items)
-                .Where(gs => gs.PlayerId == playerId)
-                .OrderByDescending(gs => gs.FinishedAt)
-                .Select(gs => new
+                .Include(gs => gs.Feedbacks)
+                .OrderByDescending(gs => gs.FinishedAt ?? gs.StartedAt)
+                .Select(gs => new GameSessionHistoryListDto
                 {
-                    sessionId = gs.Id,
-                    gameId = gs.GameId,
-                    gameName = gs.Game.Name,
-                    letterId = gs.LetterId,
-                    letterCode = gs.Letter.Code,
-                    score = gs.Score,
-                    maxScore = gs.MaxScore,
-                    durationSec = gs.DurationSec,
-                    startedAt = gs.StartedAt,
-                    finishedAt = gs.FinishedAt,
-                    itemCount = gs.Items.Count
+                    Id = gs.Id,
+                    PlayerId = gs.PlayerId,
+                    GameId = gs.GameId,
+                    GameName = gs.Game.Name,
+                    LetterId = gs.LetterId,
+                    LetterCode = gs.Letter.Code,
+                    Score = gs.Score,
+                    MaxScore = gs.MaxScore,
+                    DurationSec = gs.DurationSec,
+                    StartedAt = gs.StartedAt,
+                    FinishedAt = gs.FinishedAt,
+                    ItemCount = gs.Items.Count,
+                    CorrectItemCount = gs.Items.Count(i => i.IsCorrect == true),
+                    LatestFeedback = gs.Feedbacks
+                        .OrderByDescending(f => f.CreatedAt)
+                        .Select(f => f.Comment)
+                        .FirstOrDefault()
                 })
                 .ToListAsync();
 
             return Results.Ok(sessions);
-        })
-        .WithTags("GameSessions");
+        });
 
+        // Tek seans detayı: item skorları + feedbackler
         app.MapGet("/api/gamesessions/{sessionId:long}", async (long sessionId, AppDbContext db) =>
         {
             var session = await db.GameSessions
@@ -142,41 +149,100 @@ public static class GameSessionEndpoints
                 .Include(gs => gs.Game)
                 .Include(gs => gs.Letter)
                 .Include(gs => gs.Items)
+                .Include(gs => gs.Feedbacks)
+                    .ThenInclude(f => f.Therapist)
                 .FirstOrDefaultAsync(gs => gs.Id == sessionId);
 
             if (session is null)
                 return Results.NotFound("Game session bulunamadı.");
 
-            var response = new
+            var dto = new GameSessionDetailDto
             {
-                sessionId = session.Id,
-                playerId = session.PlayerId,
-                gameId = session.GameId,
-                gameName = session.Game.Name,
-                letterId = session.LetterId,
-                letterCode = session.Letter.Code,
-                score = session.Score,
-                maxScore = session.MaxScore,
-                durationSec = session.DurationSec,
-                startedAt = session.StartedAt,
-                finishedAt = session.FinishedAt,
-                items = session.Items
+                Id = session.Id,
+                PlayerId = session.PlayerId,
+                GameId = session.GameId,
+                GameName = session.Game.Name,
+                LetterId = session.LetterId,
+                LetterCode = session.Letter.Code,
+                Score = session.Score,
+                MaxScore = session.MaxScore,
+                DurationSec = session.DurationSec,
+                StartedAt = session.StartedAt,
+                FinishedAt = session.FinishedAt,
+                Items = session.Items
                     .OrderBy(i => i.OrderNo)
-                    .Select(i => new
+                    .Select(i => new GameSessionHistoryItemDto
                     {
-                        id = i.Id,
-                        orderNo = i.OrderNo,
-                        itemType = i.ItemType,
-                        promptText = i.PromptText,
-                        score = i.Score,
-                        isCorrect = i.IsCorrect,
-                        createdAt = i.CreatedAt
+                        Id = i.Id,
+                        OrderNo = i.OrderNo,
+                        ItemType = i.ItemType,
+                        PromptText = i.PromptText,
+                        Score = i.Score,
+                        IsCorrect = i.IsCorrect
+                    })
+                    .ToList(),
+                Feedbacks = session.Feedbacks
+                    .OrderByDescending(f => f.CreatedAt)
+                    .Select(f => new GameSessionFeedbackDto
+                    {
+                        Id = f.Id,
+                        TherapistId = f.TherapistId,
+                        TherapistName = f.Therapist.Name ?? "Terapist",
+                        Comment = f.Comment ?? "",
+                        Rating = f.Rating,
+                        CreatedAt = f.CreatedAt
                     })
                     .ToList()
             };
 
-            return Results.Ok(response);
-        })
-        .WithTags("GameSessions");
+            return Results.Ok(dto);
+        });
+
+        app.MapPost("/api/gamesessions/{sessionId:long}/feedback", async (
+            long sessionId,
+            FeedbackReq req,
+            AppDbContext db) =>
+        {
+            var session = await db.GameSessions.FindAsync(sessionId);
+            if (session is null)
+                return Results.NotFound("Oyun seansı bulunamadı.");
+
+            var therapist = await db.Therapists.FindAsync(req.TherapistId);
+            if (therapist is null)
+                return Results.BadRequest("Terapist bulunamadı.");
+
+            var feedback = new Feedback
+            {
+                GameSessionId = sessionId,
+                TherapistId = req.TherapistId,
+                Comment = req.Feedback,
+                Rating = 5,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            db.Feedbacks.Add(feedback);
+            await db.SaveChangesAsync();
+
+            return Results.Created($"/api/gamesessions/{sessionId}", new
+            {
+                id = feedback.Id,
+                message = "Geri bildirim kaydedildi."
+            });
+        });
+
+        // İstersen geçici debug için bırak
+        app.MapGet("/api/gamesessions/all", async (AppDbContext db) =>
+        {
+            var sessions = await db.GameSessions
+                .AsNoTracking()
+                .Include(gs => gs.Game)
+                .Include(gs => gs.Letter)
+                .Include(gs => gs.Items)
+                .Include(gs => gs.Feedbacks)
+                .OrderByDescending(gs => gs.FinishedAt ?? gs.StartedAt)
+                .ToListAsync();
+
+            return Results.Ok(sessions);
+        });
     }
 }
