@@ -18,6 +18,7 @@ public class AppDbContext : DbContext
     public DbSet<TherapistClient> TherapistClients => Set<TherapistClient>();
     public DbSet<TaskItem> TaskItems => Set<TaskItem>();
     public DbSet<GameSession> GameSessions => Set<GameSession>();
+    public DbSet<GameSessionItem> GameSessionItems => Set<GameSessionItem>();
     public DbSet<Feedback> Feedbacks => Set<Feedback>();
     public DbSet<Notification> Notifications => Set<Notification>();
 
@@ -97,6 +98,12 @@ public class AppDbContext : DbContext
             .HasOne(gs => gs.Task)
             .WithMany(t => t.GameSessions)
             .HasForeignKey(gs => gs.TaskId);
+
+        modelBuilder.Entity<GameSessionItem>()
+            .HasOne(gsi => gsi.GameSession)
+            .WithMany(gs => gs.Items)
+            .HasForeignKey(gsi => gsi.GameSessionId)
+            .OnDelete(DeleteBehavior.Cascade);    
 
         // Feedback ilişkileri
         modelBuilder.Entity<Feedback>()
