@@ -64,6 +64,16 @@ builder.Services.AddScoped<CloudinaryService>();
 // Controller desteği
 builder.Services.AddControllers(); 
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFlutter", policy =>
+    {
+        policy
+            .AllowAnyOrigin()
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
 // --------------------------------------------------------
 // 4. KİMLİK DOĞRULAMA (JWT Auth)
 // --------------------------------------------------------
@@ -152,6 +162,8 @@ using (var scope = app.Services.CreateScope())
 // --------------------------------------------------------
 app.UseSwagger();
 app.UseSwaggerUI();
+
+app.UseCors("AllowFlutter");
 
 app.UseAuthentication();
 app.UseAuthorization();
