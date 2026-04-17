@@ -1,16 +1,13 @@
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace DktApi.Models.Game
 {
-    [System.Serializable]
     public class FeedbackReq
     {
-        // Flutter'dan json.encode({"feedback": "..."}) olarak gelecek
-        [JsonProperty("feedback")]
+        [JsonPropertyName("feedback")]
         public string Feedback { get; set; } = string.Empty;
 
-        // Flutter'da SharedPreferences'ta tuttuğumuz terapist ID'si
-        [JsonProperty("therapist_id")]
+        [JsonPropertyName("therapistId")]
         public long TherapistId { get; set; }
     }
 }
