@@ -28,10 +28,11 @@ public class WhisperService
     /// Ses dosyasını Whisper API'ye gönderip transkript alır.
     /// </summary>
     /// <param name="audioBytes">WAV formatında ses verisi</param>
+    /// <param name="targetSyllable">Hedef hece metni — Whisper'a bağlam vermek için (ör: "ka")</param>
     /// <param name="fileName">Dosya adı (ör: "recording.wav")</param>
     /// <param name="language">Dil kodu (varsayılan: "tr" — Türkçe)</param>
     /// <returns>Whisper'ın döndüğü transkript metni</returns>
-    public async Task<WhisperResult> TranscribeAsync(byte[] audioBytes, string fileName = "recording.wav", string language = "tr")
+    public async Task<WhisperResult> TranscribeAsync(byte[] audioBytes, string targetSyllable, string fileName = "recording.wav", string language = "tr")
     {
         var startMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
@@ -47,8 +48,19 @@ public class WhisperService
         // Model
         content.Add(new StringContent("whisper-1"), "model");
 
-        // Dil
+        // Dil — Türkçeye zorla
         content.Add(new StringContent(language), "language");
+
+        // Sıcaklık — 0 = deterministik, halüsinasyonları engeller
+        content.Add(new StringContent("0"), "temperature");
+
+        // Prompt — Whisper'a bağlam ver, kısa heceler için kritik
+        // ÖNEMLİ: Türkçe küçük harfe çevir! "IT" → "ıt" olmalı, "it" değil!
+        // Aksi halde Whisper büyük "IT"yi İngilizce "Information Technology" sanıp halüsinasyon üretir
+        var normalizedSyllable = targetSyllable.ToLower(new System.Globalization.CultureInfo("tr-TR"));
+        // Örn: hedef "ıt" ise prompt = "ıt, ıta, ıth" olur
+        var prompt = $"{normalizedSyllable}, {normalizedSyllable}a, {normalizedSyllable}h";
+        content.Add(new StringContent(prompt), "prompt");
 
         // İstek
         using var request = new HttpRequestMessage(HttpMethod.Post, WHISPER_URL);

@@ -35,6 +35,12 @@ public static class SyllablePronunciationEndpoints
             if (string.IsNullOrWhiteSpace(text))
                 return Results.BadRequest(new { message = "text alanı boş." });
 
+            // ── FIX #1: Türkçe küçük harf normalize ──
+            // "IT" → "ıt" (Türkçe), "KA" → "ka"
+            // Büyük harfle giderse Whisper İngilizce sanıp halüsinasyon üretir
+            var tr = new System.Globalization.CultureInfo("tr-TR");
+            var target = text.Trim().ToLower(tr);
+
             var audioFile = form.Files.GetFile("audio_file")
                          ?? form.Files.GetFile("audioFile")
                          ?? form.Files.GetFile("audio")
@@ -51,7 +57,7 @@ public static class SyllablePronunciationEndpoints
                 inputBytes = ms.ToArray();
             }
 
-            Console.WriteLine($"[SYLLABLE] Hedef: '{text}', Ses boyutu: {inputBytes.Length} bytes");
+            Console.WriteLine($"[SYLLABLE] Ham text: '{text}', Normalize: '{target}', Ses boyutu: {inputBytes.Length} bytes");
 
             try
             {
@@ -60,13 +66,16 @@ public static class SyllablePronunciationEndpoints
                 var normalizedWav = ConvertTo16kMonoPcm16(inputBytes);
                 var decodeEnd = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-                // 4. Whisper'a gönder — transkript al
-                var whisperResult = await whisper.TranscribeAsync(normalizedWav);
+                // ── FIX #2: Normalize edilmiş hedefi Whisper'a gönder ──
+                var whisperResult = await whisper.TranscribeAsync(normalizedWav, target);
 
-                Console.WriteLine($"[SYLLABLE] Whisper transkript: '{whisperResult.Transcript}' ({whisperResult.DurationMs}ms)");
+                // ── FIX #3: Transkripti de TR normalize et, sonra score et ──
+                var transcriptNorm = (whisperResult.Transcript ?? string.Empty).Trim().ToLower(tr);
 
-                // 5. PronunciationScoringService ile karşılaştır
-                var evaluation = scoring.Evaluate(text, whisperResult.Transcript, 0);
+                Console.WriteLine($"[SYLLABLE] Whisper ham: '{whisperResult.Transcript}', Normalize: '{transcriptNorm}' ({whisperResult.DurationMs}ms)");
+
+                // 5. PronunciationScoringService ile karşılaştır (her iki taraf da normalize)
+                var evaluation = scoring.Evaluate(target, transcriptNorm, 0);
 
                 var responseSend = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
@@ -75,8 +84,8 @@ public static class SyllablePronunciationEndpoints
                 // 6. Aynı DTO formatında dön (Unity/Flutter tarafı değişmez)
                 var resultDto = new PronunciationResultDto
                 {
-                    TargetText = text,
-                    Transcript = whisperResult.Transcript,
+                    TargetText = target,
+                    Transcript = transcriptNorm,
                     ApiScore = 0, // Whisper skor vermez, sadece transkript
                     Score = evaluation.Score,
                     Passed = evaluation.Score >= 70,
