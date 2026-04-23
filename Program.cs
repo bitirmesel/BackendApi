@@ -184,5 +184,6 @@ app.MapDashboardEndpoints();
 app.MapAssetEndpoints();
 app.MapMediaEndpoints();
 app.MapNotificationEndpoints();
+app.MapAdminUpdateEndpoints();
 
 app.Run();
