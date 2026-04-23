@@ -9,7 +9,7 @@ public static class AdminUpdateEndpoints
     {
         app.MapPost("/api/admin/rename-lookups", async (AppDbContext db) =>
         {
-            // 1) Difficulty levels
+            // 1) Difficulty levels -> Türkçeleştir
             var difficultyLevels = await db.DifficultyLevels.ToListAsync();
 
             foreach (var dl in difficultyLevels)
@@ -23,28 +23,73 @@ public static class AdminUpdateEndpoints
                 };
             }
 
-            // 2) Games
+            // 2) Game type adlarını da istersen Türkçeleştir
+            var gameTypes = await db.GameTypes.ToListAsync();
+
+            foreach (var gt in gameTypes)
+            {
+                gt.Name = gt.Id switch
+                {
+                    1 => "Hece",
+                    2 => "Kelime",
+                    3 => "Cümle",
+                    _ => gt.Name
+                };
+            }
+
+            // 3) Games güncelle
             var games = await db.Games.ToListAsync();
 
             foreach (var game in games)
             {
-                game.Name = game.Id switch
+                switch (game.Id)
                 {
-                    8  => "Cümle S1 - Cümle Kur!",
-                    9  => "Cümle S2 - Fill Gap",
-                    10 => "Cümle S3 - Story",
+                    // Hece
+                    case 1:
+                        game.Name = "Hece S1 - 2 Harfliler";
+                        game.DifficultyLevelId = 1;
+                        break;
+                    case 2:
+                        game.Name = "Hece S2 - 3 Harfliler";
+                        game.DifficultyLevelId = 2;
+                        break;
+                    case 3:
+                        game.Name = "Hece S3 - 4 Harfliler";
+                        game.DifficultyLevelId = 3;
+                        break;
 
-                    1  => "Hece S1 - 2 Harfliler",
-                    2  => "Hece S2 - 3 Harfliler",
-                    3  => "Hece S3 - 4 Harfliler",
+                    // Kelime
+                    case 4:
+                        game.Name = "Kelime S1 - Hafıza Kartı";
+                        game.DifficultyLevelId = 1;
+                        break;
+                    case 5:
+                        game.Name = "Kelime S2 - Üçlü Eşleştir";
+                        game.DifficultyLevelId = 2;
+                        break;
+                    case 6:
+                        game.Name = "Kelime S3 - Mesleği Bul";
+                        game.DifficultyLevelId = 3;
+                        break;
+                    case 7:
+                        game.Name = "Kelime S3 - Gölgesini Bul";
+                        game.DifficultyLevelId = 3;
+                        break;
 
-                    4  => "Kelime S1 - Hafıza Kartı",
-                    5  => "Kelime S2 - Üçlü Eşleştir",
-                    6  => "Kelime S3 - Mesleği Bul",
-                    7  => "Kelime S3 - Gölgesini Bul",
-
-                    _ => game.Name
-                };
+                    // Cümle
+                    case 8:
+                        game.Name = "Cümle S1 - Cümle Kur!";
+                        game.DifficultyLevelId = 1;
+                        break;
+                    case 9:
+                        game.Name = "Cümle S2 -  Cümle Oyunu 2";
+                        game.DifficultyLevelId = 2;
+                        break;
+                    case 10:
+                        game.Name = "Cümle S3 - Cümle Oyunu 3";
+                        game.DifficultyLevelId = 3;
+                        break;
+                }
             }
 
             await db.SaveChangesAsync();
@@ -55,6 +100,16 @@ public static class AdminUpdateEndpoints
                 {
                     x.Id,
                     x.Level,
+                    x.Name
+                })
+                .ToListAsync();
+
+            var updatedGameTypes = await db.GameTypes
+                .OrderBy(x => x.Id)
+                .Select(x => new
+                {
+                    x.Id,
+                    x.Code,
                     x.Name
                 })
                 .ToListAsync();
@@ -75,8 +130,9 @@ public static class AdminUpdateEndpoints
 
             return Results.Ok(new
             {
-                message = "Difficulty level ve game isimleri başarıyla güncellendi.",
+                message = "Difficulty level, game type ve game isimleri başarıyla güncellendi.",
                 difficultyLevels = updatedDifficultyLevels,
+                gameTypes = updatedGameTypes,
                 games = updatedGames
             });
         })
