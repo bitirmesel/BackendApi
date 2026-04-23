@@ -61,6 +61,7 @@ builder.Services.AddScoped<IGameRepository, GameRepository>();
 builder.Services.AddScoped<IGameService, GameService>();
 builder.Services.AddScoped<CloudinaryService>();
 builder.Services.AddScoped<PronunciationScoringService>();
+builder.Services.AddScoped<WhisperService>();
 
 // Controller desteği
 builder.Services.AddControllers(); 
@@ -184,6 +185,7 @@ app.MapDashboardEndpoints();
 app.MapAssetEndpoints();
 app.MapMediaEndpoints();
 app.MapNotificationEndpoints();
+app.MapSyllablePronunciationEndpoints();
 app.MapAdminUpdateEndpoints();
 
 app.Run();
