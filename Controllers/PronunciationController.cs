@@ -5,7 +5,9 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using DktApi.Services; // CloudinaryService için gerekli
+using DktApi.Services; // CloudinaryService, PronunciationScoringService için gerekli
+using DktApi.Dtos; // PronunciationResultDto için gerekli
+using DktApi.Models.FluentMe; // FluentMe response modelleri için gerekli
 
 // NAudio
 using NAudio.Wave;
@@ -20,6 +22,7 @@ namespace DktApi.Controllers
     {
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly CloudinaryService _cloudinary;
+        private readonly PronunciationScoringService _scoringService;
 
         private const string HARDCODED_USER = "meryem.kilic";
         private const string HARDCODED_PASS = "Melv18309";
@@ -35,10 +38,14 @@ namespace DktApi.Controllers
         private static long NowMs() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
         // TEK CONSTRUCTOR
-        public PronunciationController(IHttpClientFactory httpClientFactory, CloudinaryService cloudinary)
+        public PronunciationController(
+            IHttpClientFactory httpClientFactory, 
+            CloudinaryService cloudinary,
+            PronunciationScoringService scoringService)
         {
             _httpClientFactory = httpClientFactory;
             _cloudinary = cloudinary;
+            _scoringService = scoringService;
         }
 
         [HttpPost("check")]
@@ -191,12 +198,87 @@ namespace DktApi.Controllers
                     modelVersion = "unknown"
                 }));
 
-                // FluentMe score JSON'unu aynen dön
+                // FluentMe JSON'unu parse et ve zenginleştirilmiş sonuç oluştur
                 var formatStart = NowMs();
-                var result = Content(scoreJson, "application/json");
-                var formatEnd = NowMs();
 
-                var responseSend = formatEnd;
+                // FluentMe response'unu parse et
+                var parseOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                string? transcript = null;
+                double apiScore = 0.0;
+                string? aiReadingUrl = null;
+                double recordingDurationSec = 0.0;
+
+                try
+                {
+                    using var jsonDoc = JsonDocument.Parse(scoreJson);
+                    var root = jsonDoc.RootElement;
+
+                    if (root.ValueKind == JsonValueKind.Array && root.GetArrayLength() >= 2)
+                    {
+                        // 2. eleman: overall_result_data
+                        var overallElement = root[1];
+                        if (overallElement.TryGetProperty("overall_result_data", out var overallArr) &&
+                            overallArr.ValueKind == JsonValueKind.Array && overallArr.GetArrayLength() > 0)
+                        {
+                            var overall = overallArr[0];
+                            if (overall.TryGetProperty("user_recording_transcript", out var transcriptProp))
+                                transcript = transcriptProp.GetString();
+                            if (overall.TryGetProperty("overall_points", out var scoreProp))
+                                apiScore = scoreProp.GetDouble();
+                            if (overall.TryGetProperty("ai_reading", out var aiProp))
+                                aiReadingUrl = aiProp.GetString();
+                            if (overall.TryGetProperty("length_of_recording_in_sec", out var durProp))
+                                recordingDurationSec = durProp.GetDouble();
+                        }
+                    }
+                }
+                catch (JsonException ex)
+                {
+                    Console.WriteLine($"[PRON] FluentMe JSON parse error: {ex.Message}. Falling back to raw response.");
+                    // Parse başarısız olursa ham JSON'u dön (mevcut davranış korunur)
+                    return Content(scoreJson, "application/json");
+                }
+
+                // Skor servisini çağır
+                var evaluation = _scoringService.Evaluate(text, transcript, apiScore);
+
+                Console.WriteLine(JsonSerializer.Serialize(new
+                {
+                    type = "PronunciationScoring",
+                    requestId,
+                    target = text,
+                    transcript,
+                    apiScore,
+                    calculatedScore = evaluation.Score,
+                    feedbackKey = evaluation.FeedbackKey,
+                    confidence = evaluation.Confidence
+                }));
+
+                // Zenginleştirilmiş DTO oluştur
+                var responseSend = NowMs();
+                var resultDto = new PronunciationResultDto
+                {
+                    TargetText = text,
+                    Transcript = transcript,
+                    ApiScore = apiScore,
+                    Score = evaluation.Score,
+                    Passed = evaluation.Score >= 70,
+                    Confidence = evaluation.Confidence,
+                    FeedbackKey = evaluation.FeedbackKey,
+                    AiReadingUrl = aiReadingUrl,
+                    RecordingDurationSec = recordingDurationSec,
+                    Timing = new PronunciationTimingDto
+                    {
+                        TokenMs = tokenEnd - tokenStart,
+                        PostMs = postEnd - postStart,
+                        DecodeMs = decodeEnd - decodeStart,
+                        UploadMs = uploadEnd - uploadStart,
+                        InferenceMs = scoreEnd - scoreStart,
+                        TotalMs = responseSend - requestStart
+                    }
+                };
+
+                var formatEnd = NowMs();
 
                 var timing = new
                 {
@@ -213,7 +295,7 @@ namespace DktApi.Controllers
                 var timingJson = JsonSerializer.Serialize(timing);
                 Response.Headers.Append("X-Pronunciation-Timing", timingJson);
 
-                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new
+                Console.WriteLine(JsonSerializer.Serialize(new
                 {
                     type = "PronunciationCheckCompleted",
                     requestId,
@@ -222,7 +304,7 @@ namespace DktApi.Controllers
                     totalDurationMs = responseSend - requestStart
                 }));
 
-                return result;
+                return Ok(resultDto);
             }
             catch (Exception ex)
             {

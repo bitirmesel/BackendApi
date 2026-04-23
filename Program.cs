@@ -60,6 +60,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddScoped<IGameRepository, GameRepository>();
 builder.Services.AddScoped<IGameService, GameService>();
 builder.Services.AddScoped<CloudinaryService>();
+builder.Services.AddScoped<PronunciationScoringService>();
 
 // Controller desteği
 builder.Services.AddControllers(); 

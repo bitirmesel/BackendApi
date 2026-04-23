@@ -1,0 +1,146 @@
+{
+  "info": {
+    "name": "BackendApi Collection",
+    "description": "Auto-generated collection for DktApi (BackendApi) endpoints.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login (Therapist)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@test.com\",\n  \"password\": \"123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Player Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/player/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "player", "auth", "login"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nickname\": \"child1\",\n  \"password\": \"123\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Game Sessions",
+      "item": [
+        {
+          "name": "Start Game Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/gamesessions/start",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "gamesessions", "start"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"playerId\": 1,\n  \"gameId\": 1,\n  \"letterId\": 1,\n  \"assetSetId\": 1,\n  \"taskId\": 1\n}"
+            }
+          }
+        },
+        {
+          "name": "Finish Game Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/gamesessions/finish",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "gamesessions", "finish"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"playerId\": 1,\n  \"gameId\": 1,\n  \"letterId\": 1,\n  \"taskId\": 1,\n  \"score\": 85,\n  \"targetWord\": \"köpek\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Speech",
+      "item": [
+        {
+          "name": "Pronunciation Check",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "text",
+                  "value": "köpek",
+                  "type": "text"
+                },
+                {
+                  "key": "audioFile",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/pronunciation/check",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "pronunciation", "check"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Assets",
+      "item": [
+        {
+          "name": "Get Task Asset Set",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/tasks/1/asset-set",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "tasks", "1", "asset-set"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://backendapi-8nfn.onrender.com"
+    }
+  ]
+}
