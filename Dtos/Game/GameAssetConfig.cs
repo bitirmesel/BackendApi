@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace GraduationProject.Models
 {
@@ -18,8 +19,6 @@ namespace GraduationProject.Models
         [JsonProperty("items")]
         public List<AssetItem> Items { get; set; }
 
-        // --- EKSİK OLAN KISIM BURASIYDI ---
-        // Bu satırı eklemezsen APIManager hata verir!
         [JsonProperty("asset_json")] 
         public string AssetJson { get; set; }
     }
@@ -35,5 +34,9 @@ namespace GraduationProject.Models
 
         [JsonProperty("audio")]
         public string? Audio { get; set; }
+
+        
+        [JsonExtensionData]
+        public IDictionary<string, JToken>? ExtraFields { get; set; }
     }
 }
