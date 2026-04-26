@@ -1,14 +1,12 @@
-using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using DktApi.Repositories;
-// Hatalı olan using DktApi.Dtos.Game satırını silebilirsin veya projenin modeline yönlendirebilirsin
-using GraduationProject.Models; 
 
 namespace DktApi.Services
 {
     public interface IGameService
     {
-        // Dönüş tipini GameAssetConfig olarak güncelledik
-        Task<GameAssetConfig?> GetGameConfigAsync(long gameId, long letterId);
+        // Artık raw JSON dönecek
+        Task<object?> GetGameConfigAsync(long gameId, long letterId);
     }
 
     public class GameService : IGameService
@@ -20,17 +18,17 @@ namespace DktApi.Services
             _gameRepository = gameRepository;
         }
 
-        public async Task<GameAssetConfig?> GetGameConfigAsync(long gameId, long letterId)
+        public async Task<object?> GetGameConfigAsync(long gameId, long letterId)
         {
             var assetSet = await _gameRepository.GetAssetSetAsync(gameId, letterId);
 
-            if (assetSet == null || string.IsNullOrEmpty(assetSet.AssetJson))
+            if (assetSet == null || string.IsNullOrWhiteSpace(assetSet.AssetJson))
                 return null;
 
             try
             {
-                // Artık mevcut olan GameAssetConfig sınıfına deserialize ediyoruz
-                return JsonConvert.DeserializeObject<GameAssetConfig>(assetSet.AssetJson);
+                // 🔥 KRİTİK: JSON’u olduğu gibi döndür
+                return JObject.Parse(assetSet.AssetJson);
             }
             catch
             {
