@@ -19,7 +19,7 @@ namespace GraduationProject.Models
         [JsonProperty("items")]
         public List<AssetItem> Items { get; set; }
 
-        [JsonProperty("asset_json")] 
+        [JsonProperty("asset_json")]
         public string AssetJson { get; set; }
     }
 
@@ -35,8 +35,8 @@ namespace GraduationProject.Models
         [JsonProperty("audio")]
         public string? Audio { get; set; }
 
-        
         [JsonExtensionData]
+        [JsonIgnore]
         public IDictionary<string, JToken>? ExtraFields { get; set; }
     }
 }
