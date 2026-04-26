@@ -17,12 +17,12 @@ namespace DktApi.Controllers
         [HttpGet("{gameId}/{letterId}")]
         public async Task<IActionResult> GetConfig(long gameId, long letterId)
         {
-            var config = await _gameService.GetGameConfigAsync(gameId, letterId);
+            var configJson = await _gameService.GetGameConfigAsync(gameId, letterId);
 
-            if (config == null)
+            if (string.IsNullOrWhiteSpace(configJson))
                 return NotFound("Veri bulunamadı.");
 
-            return Ok(config);
+            return Content(configJson, "application/json");
         }
     }
 }
