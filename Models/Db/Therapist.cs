@@ -13,6 +13,9 @@ public class Therapist
     [Column("name")]
     public string Name { get; set; } = string.Empty;
 
+    [Column("username")]
+    public string? Username { get; set; }
+
     [Column("email")]
     public string Email { get; set; } = string.Empty;
 
