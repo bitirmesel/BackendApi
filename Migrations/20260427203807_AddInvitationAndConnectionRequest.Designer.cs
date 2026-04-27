@@ -3,6 +3,7 @@ using System;
 using DktApi.Models.Db;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace DktApi.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260427203807_AddInvitationAndConnectionRequest")]
+    partial class AddInvitationAndConnectionRequest
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -344,11 +347,7 @@ namespace DktApi.Migrations
                     b.ToTable("game_types");
                 });
 
-<<<<<<< Updated upstream
-            modelBuilder.Entity("DktApi.Models.Db.InboxReadState", b =>
-=======
             modelBuilder.Entity("DktApi.Models.Db.InvitationCode", b =>
->>>>>>> Stashed changes
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
@@ -357,32 +356,6 @@ namespace DktApi.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
-<<<<<<< Updated upstream
-                    b.Property<long>("PlayerId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("player_id");
-
-                    b.Property<DateTime>("ReadAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("read_at");
-
-                    b.Property<long>("SourceId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("source_id");
-
-                    b.Property<string>("SourceType")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("source_type");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PlayerId", "SourceType", "SourceId")
-                        .IsUnique();
-
-                    b.ToTable("inbox_read_states", (string)null);
-=======
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(8)
@@ -425,7 +398,6 @@ namespace DktApi.Migrations
                     b.HasIndex("UsedByPlayerId");
 
                     b.ToTable("invitation_codes");
->>>>>>> Stashed changes
                 });
 
             modelBuilder.Entity("DktApi.Models.Db.Letter", b =>
@@ -703,10 +675,6 @@ namespace DktApi.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
-                    b.Property<string>("Username")
-                        .HasColumnType("text")
-                        .HasColumnName("username");
-
                     b.HasKey("Id");
 
                     b.ToTable("therapists");
@@ -865,17 +833,6 @@ namespace DktApi.Migrations
                     b.Navigation("GameSession");
                 });
 
-<<<<<<< Updated upstream
-            modelBuilder.Entity("DktApi.Models.Db.InboxReadState", b =>
-                {
-                    b.HasOne("DktApi.Models.Db.Player", "Player")
-                        .WithMany()
-                        .HasForeignKey("PlayerId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Player");
-=======
             modelBuilder.Entity("DktApi.Models.Db.InvitationCode", b =>
                 {
                     b.HasOne("DktApi.Models.Db.Therapist", "Therapist")
@@ -891,7 +848,6 @@ namespace DktApi.Migrations
                     b.Navigation("Therapist");
 
                     b.Navigation("UsedByPlayer");
->>>>>>> Stashed changes
                 });
 
             modelBuilder.Entity("DktApi.Models.Db.Notification", b =>

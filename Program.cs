@@ -191,6 +191,11 @@ app.MapMediaEndpoints();
 app.MapNotificationEndpoints();
 app.MapSyllablePronunciationEndpoints();
 app.MapAdminUpdateEndpoints();
+<<<<<<< Updated upstream
 app.MapPlayerInboxEndpoints();
+=======
+app.MapInvitationEndpoints();
+app.MapConnectionRequestEndpoints();
+>>>>>>> Stashed changes
 
 app.Run();

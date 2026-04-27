@@ -21,7 +21,12 @@ public class AppDbContext : DbContext
     public DbSet<GameSessionItem> GameSessionItems => Set<GameSessionItem>();
     public DbSet<Feedback> Feedbacks => Set<Feedback>();
     public DbSet<Notification> Notifications => Set<Notification>();
+<<<<<<< Updated upstream
     public DbSet<InboxReadState> InboxReadStates => Set<InboxReadState>();
+=======
+    public DbSet<InvitationCode> InvitationCodes => Set<InvitationCode>();
+    public DbSet<ConnectionRequest> ConnectionRequests => Set<ConnectionRequest>();
+>>>>>>> Stashed changes
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -127,6 +132,7 @@ public class AppDbContext : DbContext
             .WithMany()
             .HasForeignKey(n => n.TherapistId);
 
+<<<<<<< Updated upstream
         modelBuilder.Entity<InboxReadState>(entity =>
 {
     entity.ToTable("inbox_read_states");
@@ -158,5 +164,42 @@ public class AppDbContext : DbContext
         .HasForeignKey(x => x.PlayerId)
         .OnDelete(DeleteBehavior.Cascade);
 });    
+=======
+        // InvitationCode ilişkileri
+        modelBuilder.Entity<InvitationCode>()
+            .HasIndex(ic => ic.Code)
+            .IsUnique();
+
+        modelBuilder.Entity<InvitationCode>()
+            .HasOne(ic => ic.Therapist)
+            .WithMany()
+            .HasForeignKey(ic => ic.TherapistId);
+
+        modelBuilder.Entity<InvitationCode>()
+            .HasOne(ic => ic.UsedByPlayer)
+            .WithMany()
+            .HasForeignKey(ic => ic.UsedByPlayerId)
+            .IsRequired(false);
+
+        // ConnectionRequest ilişkileri
+        modelBuilder.Entity<ConnectionRequest>()
+            .HasIndex(cr => new { cr.PlayerId, cr.TherapistId })
+            .IsUnique();
+
+        modelBuilder.Entity<ConnectionRequest>()
+            .HasOne(cr => cr.Player)
+            .WithMany()
+            .HasForeignKey(cr => cr.PlayerId);
+
+        modelBuilder.Entity<ConnectionRequest>()
+            .HasOne(cr => cr.Therapist)
+            .WithMany()
+            .HasForeignKey(cr => cr.TherapistId);
+
+        modelBuilder.Entity<ConnectionRequest>()
+            .HasOne(cr => cr.Invitation)
+            .WithMany(ic => ic.ConnectionRequests)
+            .HasForeignKey(cr => cr.InvitationId);
+>>>>>>> Stashed changes
     }
 }
