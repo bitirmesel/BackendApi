@@ -82,3 +82,4 @@ public static class TherapistEndpoints
         .WithName("ChangeTherapistPassword");
     }
 }
+
