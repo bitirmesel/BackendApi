@@ -21,6 +21,7 @@ public class AppDbContext : DbContext
     public DbSet<GameSessionItem> GameSessionItems => Set<GameSessionItem>();
     public DbSet<Feedback> Feedbacks => Set<Feedback>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<InboxReadState> InboxReadStates => Set<InboxReadState>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -125,5 +126,37 @@ public class AppDbContext : DbContext
             .HasOne(n => n.Therapist)
             .WithMany()
             .HasForeignKey(n => n.TherapistId);
+
+        modelBuilder.Entity<InboxReadState>(entity =>
+{
+    entity.ToTable("inbox_read_states");
+
+    entity.HasKey(x => x.Id);
+
+    entity.Property(x => x.Id)
+        .HasColumnName("id");
+
+    entity.Property(x => x.PlayerId)
+        .HasColumnName("player_id");
+
+    entity.Property(x => x.SourceType)
+        .HasColumnName("source_type")
+        .HasMaxLength(30)
+        .IsRequired();
+
+    entity.Property(x => x.SourceId)
+        .HasColumnName("source_id");
+
+    entity.Property(x => x.ReadAt)
+        .HasColumnName("read_at");
+
+    entity.HasIndex(x => new { x.PlayerId, x.SourceType, x.SourceId })
+        .IsUnique();
+
+    entity.HasOne(x => x.Player)
+        .WithMany()
+        .HasForeignKey(x => x.PlayerId)
+        .OnDelete(DeleteBehavior.Cascade);
+});    
     }
 }

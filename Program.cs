@@ -191,5 +191,6 @@ app.MapMediaEndpoints();
 app.MapNotificationEndpoints();
 app.MapSyllablePronunciationEndpoints();
 app.MapAdminUpdateEndpoints();
+app.MapPlayerInboxEndpoints();
 
 app.Run();

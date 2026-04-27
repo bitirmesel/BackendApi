@@ -28,14 +28,9 @@ public static class AuthEndpoints
             {
                 return Results.Unauthorized();
             }
-<<<<<<< HEAD
             
             // JWT Token Generate Et
             var token = jwtHelper.GenerateToken(therapist);
-=======
-
-            // Eğer isterseniz burada "last_login" tarihini de güncelleyebilirsiniz.
->>>>>>> 2bc8cc305b369caec5a9d022aba7e03933857daf
 
             return Results.Ok(new AuthResponse
             {
@@ -93,16 +88,11 @@ public static class AuthEndpoints
             // 5. Veritabanına Ekleme
             db.Therapists.Add(newTherapist);
             await db.SaveChangesAsync();
-<<<<<<< HEAD
             
             // 6. JWT Token Generate Et
             var token = jwtHelper.GenerateToken(newTherapist);
             
             // 7. Başarılı Yanıt
-=======
-
-            // 4. Başarılı Yanıt (Flutter'ın beklediği token ve id yapısı)
->>>>>>> 2bc8cc305b369caec5a9d022aba7e03933857daf
             return Results.Ok(new AuthResponse
             {
                 Token = token,
