@@ -1,6 +1,6 @@
 using DktApi.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Http; // <--- BU EKSİKTİ
+using Microsoft.AspNetCore.Http; 
 
 namespace DktApi.Endpoints;
 

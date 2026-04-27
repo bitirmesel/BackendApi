@@ -64,10 +64,22 @@ builder.Services.AddScoped<IGameRepository, GameRepository>();
 builder.Services.AddScoped<IGameService, GameService>();
 builder.Services.AddScoped<CloudinaryService>();
 builder.Services.AddScoped<JwtHelper>();
+builder.Services.AddScoped<PronunciationScoringService>();
+builder.Services.AddScoped<WhisperService>();
 
 // Controller desteği
 builder.Services.AddControllers(); 
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFlutter", policy =>
+    {
+        policy
+            .AllowAnyOrigin()
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
 // --------------------------------------------------------
 // 4. KİMLİK DOĞRULAMA (JWT Auth)
 // --------------------------------------------------------
@@ -144,18 +156,20 @@ var app = builder.Build();
 // --------------------------------------------------------
 // 6. OTOMATİK MIGRATION
 // --------------------------------------------------------
-/*
+
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
 }
-*/
+
 // --------------------------------------------------------
 // 7. MIDDLEWARE
 // --------------------------------------------------------
 app.UseSwagger();
 app.UseSwaggerUI();
+
+app.UseCors("AllowFlutter");
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -175,5 +189,7 @@ app.MapDashboardEndpoints();
 app.MapAssetEndpoints();
 app.MapMediaEndpoints();
 app.MapNotificationEndpoints();
+app.MapSyllablePronunciationEndpoints();
+app.MapAdminUpdateEndpoints();
 
 app.Run();

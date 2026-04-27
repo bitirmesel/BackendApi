@@ -121,6 +121,42 @@ public static class AssetEndpoints
 .WithTags("Assets")
 .WithName("GetAllAssetSetsDebug");
 
+        // POST /api/assets/bulk-create
+        // Birden fazla asset setini tek seferde eklemek/güncellemek için
+        app.MapPost("/api/assets/bulk-create", async (List<CreateAssetSetRequest> reqList, AppDbContext db) =>
+        {
+            var results = new List<object>();
+
+            foreach (var req in reqList)
+            {
+                var existing = await db.AssetSets
+                    .FirstOrDefaultAsync(a => a.GameId == req.GameId && a.LetterId == req.LetterId);
+
+                if (existing != null)
+                {
+                    existing.AssetJson = req.JsonData;
+                    existing.CreatedAt = DateTime.UtcNow;
+                    results.Add(new { gameId = req.GameId, letterId = req.LetterId, status = "GÜNCELLENDI", id = existing.Id });
+                }
+                else
+                {
+                    var newAssetSet = new AssetSet
+                    {
+                        GameId = req.GameId,
+                        LetterId = req.LetterId,
+                        AssetJson = req.JsonData,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    db.AssetSets.Add(newAssetSet);
+                    results.Add(new { gameId = req.GameId, letterId = req.LetterId, status = "OLUŞTURULDU", id = 0 });
+                }
+            }
+
+            await db.SaveChangesAsync();
+            return Results.Ok(new { message = $"{reqList.Count} asset seti işlendi.", details = results });
+        })
+        .WithTags("Assets")
+        .WithName("BulkCreateAssets");
 
     }
 

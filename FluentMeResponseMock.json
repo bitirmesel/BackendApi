@@ -1,0 +1,29 @@
+[
+  {
+    "type": "metadata",
+    "status": "success"
+  },
+  {
+    "OverallResult": [
+      {
+        "score": 85.5,
+        "pronunciation": 88.0,
+        "fluency": 82.0,
+        "details": "Good pronunciation of 'ö' and 'p'."
+      }
+    ],
+    "WordResults": [
+      {
+        "word": "köpek",
+        "score": 85.5,
+        "phonemes": [
+          {"phoneme": "k", "score": 90},
+          {"phoneme": "ö", "score": 80},
+          {"phoneme": "p", "score": 85},
+          {"phoneme": "e", "score": 90},
+          {"phoneme": "k", "score": 82}
+        ]
+      }
+    ]
+  }
+]
