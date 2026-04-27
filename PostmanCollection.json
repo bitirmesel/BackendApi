@@ -60,6 +60,24 @@
               "path": ["api", "players", "1", "therapists"]
             }
           }
+        },
+        {
+          "name": "Patch player (partial update)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/players/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "players", "1"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"city\": \"Ankara\"\n}"
+            }
+          }
         }
       ]
     },
