@@ -47,6 +47,23 @@
       ]
     },
     {
+      "name": "Players",
+      "item": [
+        {
+          "name": "Get linked therapists (by playerId)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/players/1/therapists",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "players", "1", "therapists"]
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "Game Sessions",
       "item": [
         {

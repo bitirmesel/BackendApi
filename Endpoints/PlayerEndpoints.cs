@@ -126,6 +126,46 @@ public static class PlayerEndpoints
         .WithName("GetStudentDetail");
 
         // ----------------------------------------------------
+        // Danışanın bağlı terapist(ler)i — therapist_clients
+        // GET /api/players/{playerId}/therapists
+        // ----------------------------------------------------
+        app.MapGet("/api/players/{playerId:long}/therapists", async (long playerId, AppDbContext db) =>
+        {
+            var playerExists = await db.Players.AsNoTracking().AnyAsync(p => p.Id == playerId);
+            if (!playerExists)
+                return Results.NotFound(new { error = "Danışan bulunamadı." });
+
+            var therapists = await db.TherapistClients
+                .AsNoTracking()
+                .Where(tc => tc.PlayerId == playerId)
+                .OrderBy(tc => tc.TherapistId)
+                .Select(tc => new
+                {
+                    id = tc.Therapist.Id,
+                    advisorId = tc.Therapist.Id,
+                    name = tc.Therapist.Name,
+                    username = tc.Therapist.Username,
+                    email = tc.Therapist.Email,
+                    phoneNumber = tc.Therapist.PhoneNumber,
+                    licenseNumber = tc.Therapist.LicenseNumber,
+                    profileImageUrl = tc.Therapist.ProfileImageUrl,
+                    clinicName = tc.Therapist.ClinicName,
+                    city = tc.Therapist.City,
+                    createdAt = tc.Therapist.CreatedAt,
+                    updatedAt = tc.Therapist.UpdatedAt
+                })
+                .ToListAsync();
+
+            return Results.Ok(new
+            {
+                playerId,
+                therapists
+            });
+        })
+        .WithTags("Players")
+        .WithName("GetPlayerTherapists");
+
+        // ----------------------------------------------------
 // 4) TÜM PLAYER'LAR (DEBUG / ADMIN)
 // GET /api/players
 // ----------------------------------------------------
