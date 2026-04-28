@@ -15,31 +15,19 @@ public static class PlayerEndpoints
         // ----------------------------------------------------
         app.MapGet("/api/students", async ([FromQuery] long therapistId, AppDbContext db) =>
         {
-            // Bu terapiste bağlı öğrencileri therapist_clients üzerinden alıyoruz
-            var playersQuery = db.TherapistClients
-                .Where(tc => tc.TherapistId == therapistId)
-                .Include(tc => tc.Player)
-                    .ThenInclude(p => p.Tasks);
-
-            var list = await playersQuery.ToListAsync();
-
-            var result = list.Select(tc =>
-            {
-                var p = tc.Player;
-
-                var activeTasksCount = p.Tasks.Count(t => t.Status != "COMPLETED");
-
-                return new
+            var result = await db.TherapistClients
+                .Where(tc => tc.TherapistId == therapistId && tc.Player != null)
+                .Select(tc => new
                 {
-                    id = p.Id,
-                    name = p.Name,
-                    score = p.TotalScore ?? 0,
-                    lastActive = p.LastLogin,          // ISO'ya serialize edilir
-                    activeTasks = activeTasksCount,
-                    therapistId = therapistId,         // backend kullanımı için
-                    advisorId = therapistId            // Flutter'ın beklediği isim
-                };
-            });
+                    id = tc.Player.Id,
+                    name = tc.Player.Name,
+                    score = tc.Player.TotalScore ?? 0,
+                    lastActive = tc.Player.LastLogin,
+                    activeTasks = tc.Player.Tasks.Count(t => t.Status != "COMPLETED"),
+                    therapistId = therapistId,
+                    advisorId = therapistId
+                })
+                .ToListAsync();
 
             return Results.Ok(result);
         })
