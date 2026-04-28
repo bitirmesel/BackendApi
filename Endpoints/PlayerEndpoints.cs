@@ -15,21 +15,42 @@ public static class PlayerEndpoints
         // ----------------------------------------------------
         app.MapGet("/api/students", async ([FromQuery] long therapistId, AppDbContext db) =>
         {
-            var result = await db.TherapistClients
-                .Where(tc => tc.TherapistId == therapistId && tc.Player != null)
-                .Select(tc => new
-                {
-                    id = tc.Player.Id,
-                    name = tc.Player.Name,
-                    score = tc.Player.TotalScore ?? 0,
-                    lastActive = tc.Player.LastLogin,
-                    activeTasks = tc.Player.Tasks.Count(t => t.Status != "COMPLETED"),
-                    therapistId = therapistId,
-                    advisorId = therapistId
-                })
-                .ToListAsync();
+            try
+            {
+                // 1) Sadece bu terapiste bağlı, gerçekten var olan player_id'leri al
+                var playerIds = await db.TherapistClients
+                    .Where(tc => tc.TherapistId == therapistId)
+                    .Select(tc => tc.PlayerId)
+                    .ToListAsync();
 
-            return Results.Ok(result);
+                if (playerIds.Count == 0)
+                    return Results.Ok(Array.Empty<object>());
+
+                // 2) Players tablosundan yükle (orphan player_id'ler otomatik düşer)
+                var players = await db.Players
+                    .Where(p => playerIds.Contains(p.Id))
+                    .Select(p => new
+                    {
+                        id = p.Id,
+                        name = p.Name,
+                        score = p.TotalScore ?? 0,
+                        lastActive = p.LastLogin,
+                        activeTasks = db.TaskItems.Count(t => t.PlayerId == p.Id && t.Status != "COMPLETED"),
+                        therapistId = therapistId,
+                        advisorId = therapistId
+                    })
+                    .ToListAsync();
+
+                return Results.Ok(players);
+            }
+            catch (Exception ex)
+            {
+                // GEÇİCİ TEŞHİS — sorun çözüldükten sonra kaldırılacak
+                return Results.Problem(
+                    title: "GET /api/students patladı",
+                    detail: $"{ex.GetType().Name}: {ex.Message}\n--- INNER ---\n{ex.InnerException?.GetType().Name}: {ex.InnerException?.Message}\n--- STACK ---\n{ex.StackTrace}",
+                    statusCode: 500);
+            }
         })
         .WithTags("Students")
         .WithName("GetStudents");
