@@ -145,6 +145,68 @@ public static class GameSessionEndpoints
 });
 
 
+        app.MapPost("/api/gamesessions/{sessionId:long}/progress", async (
+            long sessionId,
+            SaveGameSessionProgressReq req,
+            AppDbContext db) =>
+        {
+            if (req.MaxScore < 0)
+                return Results.BadRequest(new { message = "MaxScore negatif olamaz." });
+
+            if (req.Score < 0)
+                return Results.BadRequest(new { message = "Score negatif olamaz." });
+
+            var session = await db.GameSessions
+                .Include(gs => gs.Items)
+                .FirstOrDefaultAsync(gs => gs.Id == sessionId);
+
+            if (session is null)
+                return Results.NotFound(new { message = "Game session bulunamadı." });
+
+            if (session.FinishedAt.HasValue)
+                return Results.BadRequest(new { message = "Tamamlanmış oturumun ilerlemesi güncellenemez." });
+
+            await using var tx = await db.Database.BeginTransactionAsync();
+
+            session.Score = req.Score;
+            session.MaxScore = req.MaxScore;
+            session.DurationSec = req.DurationSec;
+
+            if (session.Items.Any())
+                db.GameSessionItems.RemoveRange(session.Items);
+
+            var items = req.Items
+                .OrderBy(x => x.OrderNo)
+                .Select(x => new GameSessionItem
+                {
+                    GameSessionId = session.Id,
+                    OrderNo = x.OrderNo,
+                    ItemType = string.IsNullOrWhiteSpace(x.ItemType) ? "WORD" : x.ItemType,
+                    PromptText = x.PromptText ?? string.Empty,
+                    Score = x.Score,
+                    IsCorrect = x.IsCorrect,
+                    CreatedAt = DateTime.UtcNow
+                })
+                .ToList();
+
+            if (items.Count > 0)
+                db.GameSessionItems.AddRange(items);
+
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+
+            return Results.Ok(new
+            {
+                message = "İlerleme kaydedildi.",
+                sessionId = session.Id,
+                score = session.Score,
+                maxScore = session.MaxScore,
+                durationSec = session.DurationSec,
+                itemCount = items.Count,
+                isCompleted = false
+            });
+        });
+
         app.MapGet("/api/therapists/{therapistId:long}/players/{playerId:long}/game-sessions",
             async (long therapistId, long playerId, AppDbContext db) =>
         {

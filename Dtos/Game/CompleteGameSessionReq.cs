@@ -16,3 +16,11 @@ public class CompleteGameSessionItemReq
     public int? Score { get; set; }
     public bool? IsCorrect { get; set; }
 }
+
+public class SaveGameSessionProgressReq
+{
+    public int Score { get; set; }
+    public int MaxScore { get; set; }
+    public int? DurationSec { get; set; }
+    public List<CompleteGameSessionItemReq> Items { get; set; } = new();
+}
