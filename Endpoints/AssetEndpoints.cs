@@ -183,6 +183,37 @@ public static class AssetEndpoints
         .WithTags("Assets")
         .WithName("BulkCreateAssets");
 
+        // PUT /api/assets/{gameId}/{letterId}/json
+        // Mevcut asset set'in JSON'ını entity yüklemeden direkt günceller
+        app.MapPut("/api/assets/{gameId:long}/{letterId:long}/json", async (long gameId, long letterId, UpdateAssetJsonRequest req, AppDbContext db) =>
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(req.JsonData))
+                    return Results.BadRequest(new { message = "JsonData boş olamaz." });
+
+                var rowsUpdated = await db.AssetSets
+                    .Where(a => a.GameId == gameId && a.LetterId == letterId)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(a => a.AssetJson, req.JsonData)
+                        .SetProperty(a => a.CreatedAt, DateTime.UtcNow));
+
+                if (rowsUpdated == 0)
+                    return Results.NotFound(new { message = $"GameId={gameId}, LetterId={letterId} için kayıt bulunamadı." });
+
+                return Results.Ok(new { message = "Asset JSON güncellendi.", gameId, letterId });
+            }
+            catch (Exception ex)
+            {
+                return Results.Json(
+                    new { error = ex.Message, inner = ex.InnerException?.Message ?? "-" },
+                    statusCode: 500
+                );
+            }
+        })
+        .WithTags("Assets")
+        .WithName("UpdateAssetJson");
+
     }
 
 
