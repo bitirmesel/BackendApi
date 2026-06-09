@@ -79,15 +79,23 @@ public static class DashboardEndpoints
                      gs.FinishedAt <= targetDate)
         .ToListAsync();
 
+    // ── 🛠️ GÜN KAYMASINI İMHA EDEN DOĞRU TÜRKÇE HARİTALAMA ──
     var weeklyActivity = Enumerable.Range(0, 7)
         .Select(offset =>
         {
             var dayDate = weekStart.AddDays(offset);
             var count = allWeekSessions.Count(s => s.FinishedAt!.Value.Date == dayDate.Date);
 
+            // InvariantCulture yerine doğrudan Türkçe (tr-TR) kültürünü veriyoruz
+            // "ddd" formatı bize "Pzt", "Sal", "Çar" gibi tam senin Flutter'daki etiketleri verir.
+            var dayNameTr = dayDate.ToString("ddd", new System.Globalization.CultureInfo("tr-TR"));
+
+            // fl_chart'ın baş harf hassasiyeti varsa garantiye almak için "Pzt", "Sal" formatına çekiyoruz
+            if (dayNameTr.StartsWith("Paz")) dayNameTr = "Paz";
+
             return new
             {
-                day = dayDate.ToString("ddd", System.Globalization.CultureInfo.InvariantCulture),
+                day = dayNameTr,
                 count
             };
         })
