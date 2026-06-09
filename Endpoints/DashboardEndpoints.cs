@@ -1,6 +1,6 @@
 using DktApi.Models.Db;
 using Microsoft.EntityFrameworkCore;
-using System.Linq; 
+using System.Linq;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
@@ -9,101 +9,102 @@ namespace DktApi.Endpoints;
 
 public static class DashboardEndpoints
 {
-    public static void MapDashboardEndpoints(this WebApplication app) 
+    public static void MapDashboardEndpoints(this WebApplication app)
     {
         // --------------------------------------------------
         // 1) ANA DASHBOARD ÖZETİ
         // URL: GET /api/dashboard/summary?therapistId=...
         // Terapiste bağlı öğrencilerin serbest ve ödev tüm seanslarını kapsar.
         // --------------------------------------------------
-        app.MapGet("/api/dashboard/summary", async (long? therapistId, AppDbContext db) =>
+        app.MapGet("/api/dashboard/summary", async (long? therapistId, string? selectedDate, AppDbContext db) =>
+{
+    if (therapistId is null)
+        return Results.BadRequest("TherapistId gereklidir.");
+
+    var id = therapistId.Value;
+
+    var therapist = await db.Therapists.FirstOrDefaultAsync(t => t.Id == id);
+    if (therapist is null)
+        return Results.NotFound("Therapist not found");
+
+    var studentIds = await db.TherapistClients
+        .Where(tc => tc.TherapistId == id)
+        .Select(tc => tc.PlayerId)
+        .Distinct()
+        .ToListAsync();
+
+    var totalStudents = studentIds.Count;
+
+    // ── KRİTİK TARİH SEÇİMİ GÜNCELLEMESİ ──
+    // Eğer Flutter'dan bir tarih gelirse onu baz al, gelmezse bugünün tarihini (UtcNow) kullan.
+    DateTime targetDate = DateTime.UtcNow;
+    if (!string.IsNullOrEmpty(selectedDate) && DateTime.TryParse(selectedDate, out var parsedDate))
+    {
+        targetDate = parsedDate.ToUniversalTime();
+    }
+
+    // Seçilen tarihin 7 gün öncesini ve haftalık başlangıcını hesapla
+    var weekAgo = targetDate.AddDays(-7);
+    var weekStart = targetDate.Date.AddDays(-6);
+
+    var sessionsLastWeek = await db.GameSessions
+        .Where(gs => studentIds.Contains(gs.PlayerId) &&
+                     gs.FinishedAt != null &&
+                     gs.FinishedAt >= weekAgo &&
+                     gs.FinishedAt <= targetDate) // Seçilen hedef tarihe kadar olan aralık
+        .ToListAsync();
+
+    var completedThisWeek = sessionsLastWeek.Count;
+
+    // Geri bildirimi olmayan seans sayısı (Tüm zamanlar veya seçili aralık)
+    var pendingFeedback = await db.GameSessions
+        .Include(gs => gs.Feedbacks)
+        .Where(gs => studentIds.Contains(gs.PlayerId) &&
+                     gs.FinishedAt != null &&
+                     gs.Feedbacks.Count == 0)
+        .CountAsync();
+
+    int successRate = 0;
+    var scoredSessions = sessionsLastWeek.Where(s => s.MaxScore > 0).ToList();
+    if (scoredSessions.Any())
+    {
+        var avg = scoredSessions.Average(s => (double)s.Score / s.MaxScore);
+        successRate = (int)Math.Round(avg * 100);
+    }
+
+    var allWeekSessions = await db.GameSessions
+        .Where(gs => studentIds.Contains(gs.PlayerId) &&
+                     gs.FinishedAt != null &&
+                     gs.FinishedAt >= weekStart &&
+                     gs.FinishedAt <= targetDate)
+        .ToListAsync();
+
+    var weeklyActivity = Enumerable.Range(0, 7)
+        .Select(offset =>
         {
-            if (therapistId is null)
-                return Results.BadRequest("TherapistId gereklidir.");
-            
-            var id = therapistId.Value;
+            var dayDate = weekStart.AddDays(offset);
+            var count = allWeekSessions.Count(s => s.FinishedAt!.Value.Date == dayDate.Date);
 
-            var therapist = await db.Therapists
-                .FirstOrDefaultAsync(t => t.Id == id);
-
-            if (therapist is null)
-                return Results.NotFound("Therapist not found");
-
-            // Terapistin danışanı olan benzersiz öğrenci ID listesi
-            var studentIds = await db.TherapistClients
-                .Where(tc => tc.TherapistId == id)
-                .Select(tc => tc.PlayerId)
-                .Distinct()
-                .ToListAsync();
-
-            var totalStudents = studentIds.Count;
-
-            var now = DateTime.UtcNow;
-            var weekAgo = now.AddDays(-7);
-            var weekStart = now.Date.AddDays(-6); // Bugün dahil son 7 günün başlangıcı
-
-            // ── KRİTİK GÜNCELLEME ──
-            // Sadece ödevleri (gs.Task != null) değil, bu terapiste bağlı öğrencilerin son 7 gündeki TÜM seanslarını çeker.
-            var sessionsLastWeek = await db.GameSessions
-                .Where(gs => studentIds.Contains(gs.PlayerId) && 
-                             gs.FinishedAt != null && 
-                             gs.FinishedAt >= weekAgo)
-                .ToListAsync();
-
-            var completedThisWeek = sessionsLastWeek.Count;
-
-            // Geri bildirimi (feedback) olmayan tamamlanmış oturum sayısı
-            var pendingFeedback = await db.GameSessions
-                .Include(gs => gs.Feedbacks)
-                .Where(gs => studentIds.Contains(gs.PlayerId) && 
-                             gs.FinishedAt != null && 
-                             gs.Feedbacks.Count == 0)
-                .CountAsync();
-
-            // Başarı oranı: score / max_score ortalaması
-            int successRate = 0;
-            var scoredSessions = sessionsLastWeek.Where(s => s.MaxScore > 0).ToList();
-            if (scoredSessions.Any())
+            return new
             {
-                var avg = scoredSessions.Average(s => (double)s.Score / s.MaxScore);
-                successRate = (int)Math.Round(avg * 100);
-            }
-
-            // Haftalık aktivite: son 7 günün her bir günü için { day, count }
-            var allWeekSessions = await db.GameSessions
-                .Where(gs => studentIds.Contains(gs.PlayerId) && 
-                             gs.FinishedAt != null && 
-                             gs.FinishedAt >= weekStart)
-                .ToListAsync();
-
-            // Gün isimlerini "tr-TR" formatında (Pzt, Sal...) üreterek Flutter fl_chart ile kusursuz eşleştirir.
-            var weeklyActivity = Enumerable.Range(0, 7)
-                .Select(offset =>
-                {
-                    var dayDate = weekStart.AddDays(offset);
-                    var count = allWeekSessions.Count(s => s.FinishedAt!.Value.Date == dayDate.Date);
-
-                    return new
-                    {
-                        day = dayDate.ToString("ddd", new System.Globalization.CultureInfo("tr-TR")),
-                        count
-                    };
-                })
-                .ToList();
-
-            // DTO olarak döndürülecek anonim nesne
-            var dto = new
-            {
-                advisorName = therapist.Name,
-                totalStudents,
-                completedThisWeek,
-                pendingFeedback,
-                successRate,
-                weeklyActivity
+                day = dayDate.ToString("ddd", System.Globalization.CultureInfo.InvariantCulture),
+                count
             };
+        })
+        .ToList();
 
-            return Results.Ok(dto);
-        }).WithTags("Dashboard").WithName("GetDashboardSummary");
+    var dto = new
+    {
+        advisorName = therapist.Name,
+        totalStudents,
+        completedThisWeek,
+        pendingFeedback,
+        successRate,
+        weeklyActivity
+    };
+
+    return Results.Ok(dto);
+}).WithTags("Dashboard").WithName("GetDashboardSummary");
 
         // --------------------------------------------------
         // 2) ÖĞRENCİ DETAY İSTATİSTİKLERİ (Önceki Tanım Korundu)
