@@ -12,32 +12,57 @@ public static class AssetEndpoints
         // Bu adrese istek atarak veritabanına asset ekleyeceğiz
         app.MapPost("/api/assets/create", async (CreateAssetSetRequest req, AppDbContext db) =>
         {
-            // 1. Önce bu oyun ve harf için daha önce kayıt var mı bakalım?
-            var existing = await db.AssetSets
-                .FirstOrDefaultAsync(a => a.GameId == req.GameId && a.LetterId == req.LetterId);
-
-            if (existing != null)
+            try
             {
-                // Varsa güncelleyelim
-                existing.AssetJson = req.JsonData;
-                existing.CreatedAt = DateTime.UtcNow;
+                if (req.GameId <= 0 || req.LetterId <= 0)
+                    return Results.BadRequest(new { message = "GameId ve LetterId sıfırdan büyük olmalı." });
+
+                if (string.IsNullOrWhiteSpace(req.JsonData))
+                    return Results.BadRequest(new { message = "JsonData boş olamaz." });
+
+                // 1. Önce bu oyun ve harf için daha önce kayıt var mı bakalım?
+                var existing = await db.AssetSets
+                    .FirstOrDefaultAsync(a => a.GameId == req.GameId && a.LetterId == req.LetterId);
+
+                if (existing != null)
+                {
+                    // Varsa güncelleyelim
+                    existing.AssetJson = req.JsonData;
+                    existing.CreatedAt = DateTime.UtcNow;
+                    await db.SaveChangesAsync();
+                    return Results.Ok(new { message = "Asset seti GÜNCELLENDİ.", id = existing.Id });
+                }
+
+                // 2. Game ve Letter var mı kontrol et
+                var gameExists = await db.Games.AnyAsync(g => g.Id == req.GameId);
+                if (!gameExists)
+                    return Results.NotFound(new { message = $"GameId={req.GameId} bulunamadı." });
+
+                var letterExists = await db.Letters.AnyAsync(l => l.Id == req.LetterId);
+                if (!letterExists)
+                    return Results.NotFound(new { message = $"LetterId={req.LetterId} bulunamadı." });
+
+                // 3. Yoksa yenisini oluşturalım
+                var newAssetSet = new AssetSet
+                {
+                    GameId = req.GameId,
+                    LetterId = req.LetterId,
+                    AssetJson = req.JsonData,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                db.AssetSets.Add(newAssetSet);
                 await db.SaveChangesAsync();
-                return Results.Ok(new { message = "Asset seti GÜNCELLENDİ.", id = existing.Id });
+
+                return Results.Ok(new { message = "Yeni asset seti OLUŞTURULDU.", id = newAssetSet.Id });
             }
-
-            // 2. Yoksa yenisini oluşturalım
-            var newAssetSet = new AssetSet
+            catch (Exception ex)
             {
-                GameId = req.GameId,
-                LetterId = req.LetterId,
-                AssetJson = req.JsonData,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            db.AssetSets.Add(newAssetSet);
-            await db.SaveChangesAsync();
-
-            return Results.Ok(new { message = "Yeni asset seti OLUŞTURULDU.", id = newAssetSet.Id });
+                return Results.Problem(
+                    detail: ex.Message + " | Inner: " + (ex.InnerException?.Message ?? "-"),
+                    statusCode: 500
+                );
+            }
         })
         .WithTags("Assets"); // Swagger'da "Assets" başlığı altında görünsün
 
@@ -160,5 +185,5 @@ public static class AssetEndpoints
 
     }
 
-    
+
 }

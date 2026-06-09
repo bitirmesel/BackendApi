@@ -44,6 +44,36 @@ public class CloudinaryService
         return uploadResult.SecureUrl.ToString();
     }
 
+    // Ses Yükleme (Admin/Terapist paneli için - IFormFile)
+    public async Task<string> UploadAudioFileAsync(IFormFile file, string folder = "game_audio")
+    {
+        if (file == null || file.Length == 0)
+            throw new ArgumentException("Ses dosyası boş olamaz");
+
+        var ext = Path.GetExtension(file.FileName).ToLower();
+        var allowed = new[] { ".mp3", ".wav", ".ogg", ".m4a", ".aac" };
+        if (!allowed.Contains(ext))
+            throw new ArgumentException($"Desteklenmeyen format: {ext}. İzin verilenler: mp3, wav, ogg, m4a, aac");
+
+        using var stream = file.OpenReadStream();
+        var publicId = $"{folder}/{Path.GetFileNameWithoutExtension(file.FileName)}_{DateTime.UtcNow.Ticks}";
+
+        var uploadParams = new RawUploadParams
+        {
+            File = new FileDescription(file.FileName, stream),
+            Folder = folder,
+            PublicId = publicId,
+            Overwrite = false
+        };
+
+        var result = await _cloudinary.UploadAsync(uploadParams);
+
+        if (result.StatusCode != HttpStatusCode.OK && result.StatusCode != HttpStatusCode.Created)
+            throw new Exception("Cloudinary audio upload failed: " + result.Error?.Message);
+
+        return result.SecureUrl.ToString();
+    }
+
     // Ses Yükleme (Unity Pronunciation için - WAV byte[])
     public async Task<string> UploadAudioAsync(byte[] wavBytes, string fileName)
     {
