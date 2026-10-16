@@ -4,6 +4,8 @@ using DktApi.Models.Db;
 using DktApi.Services; 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Npgsql;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using DktApi.Repositories;
@@ -14,31 +16,21 @@ using DktApi;
 var builder = WebApplication.CreateBuilder(args);
 
 // =========================================================================
-// 1. STARTUP DEBUG (HATAYI BURADA YAKALAYACAĞIZ)
+// 1. YAPILANDIRMA / SIRLAR
 // =========================================================================
-// Uygulama başlarken Render'daki değişkenleri görüyor mu test ediyoruz.
-Console.WriteLine("--------------------------------------------------");
-Console.WriteLine("[STARTUP] Uygulama Başlatılıyor...");
+// Sırlar repoda tutulmaz. Kaynaklar (sonraki öncekini ezer):
+//   appsettings.json → appsettings.{Env}.json → user-secrets (yalnızca Development) → ortam değişkenleri
+// Gerekli ortam değişkenleri için README.md'ye bakın.
+Console.WriteLine($"[STARTUP] Uygulama başlatılıyor... Ortam: {builder.Environment.EnvironmentName}");
 
-var envUser = Environment.GetEnvironmentVariable("FLUENT_USER");
-var confUser = builder.Configuration["FLUENT_USER"];
-
-Console.WriteLine($"[ENV CHECK] OS Environment 'FLUENT_USER': '{envUser}'");
-Console.WriteLine($"[CONF CHECK] IConfiguration 'FLUENT_USER': '{confUser}'");
-
-if (string.IsNullOrEmpty(confUser))
+// Tek kaynaktan oku, aynı örneği DI'a ver (controller IOptions<FluentMeOptions> ile alır)
+var fluentMe = builder.Configuration.GetSection(FluentMeOptions.SectionName).Get<FluentMeOptions>() ?? new FluentMeOptions();
+builder.Services.AddSingleton(Options.Create(fluentMe));
+if (!fluentMe.IsConfigured)
 {
-    Console.WriteLine("[CRITICAL WARNING] FLUENT_USER yapılandırmadan okunamadı!");
-    Console.WriteLine("Olası Sebepler:");
-    Console.WriteLine("1. Render Environment sekmesinde 'Save Changes' yapılmadı.");
-    Console.WriteLine("2. Değişken isminde boşluk var (örn: 'FLUENT_USER ').");
-    Console.WriteLine("3. appsettings.json içinde bu değer boş string olarak tanımlı ve eziyor.");
+    // Uygulamayı durdurmuyoruz: yalnızca /api/pronunciation/check etkilenir.
+    Console.WriteLine("[WARN] FluentMe ayarları eksik (FluentMe__User, FluentMe__Password, FluentMe__ApiKey). Kelime telaffuz kontrolü 503 dönecek.");
 }
-else
-{
-    Console.WriteLine("[SUCCESS] FLUENT_USER başarıyla algılandı.");
-}
-Console.WriteLine("--------------------------------------------------");
 // =========================================================================
 
 // --------------------------------------------------------
@@ -51,7 +43,24 @@ if (string.IsNullOrWhiteSpace(connStr))
     connStr = Environment.GetEnvironmentVariable("DATABASE_URL");
     
     if (string.IsNullOrWhiteSpace(connStr))
-        throw new InvalidOperationException("Connection string 'Pg' not found or empty!");
+        throw new InvalidOperationException("Veritabanı bağlantısı bulunamadı! 'ConnectionStrings__Pg' ortam değişkenini (yerelde user-secrets) ayarlayın.");
+}
+
+// Render'ın verdiği URL biçimi (postgres://user:pass@host:port/db) Npgsql'de çalışmaz → anahtar=değer biçimine çevir
+if (connStr.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) ||
+    connStr.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+{
+    var dbUri = new Uri(connStr);
+    var userInfo = dbUri.UserInfo.Split(':', 2);
+    connStr = new NpgsqlConnectionStringBuilder
+    {
+        Host = dbUri.Host,
+        Port = dbUri.Port > 0 ? dbUri.Port : 5432,
+        Database = Uri.UnescapeDataString(dbUri.AbsolutePath.TrimStart('/')),
+        Username = Uri.UnescapeDataString(userInfo[0]),
+        Password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : null,
+        SslMode = SslMode.Require
+    }.ConnectionString;
 }
 
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -85,10 +94,12 @@ builder.Services.AddCors(options =>
 // --------------------------------------------------------
 var jwtConfig = builder.Configuration.GetSection("Jwt");
 var keyParam = jwtConfig["Key"];
-// Emniyet sübabı: Eğer key yoksa default kullanmasın, hata versin veya güvenli loglasın
-if (string.IsNullOrEmpty(keyParam)) Console.WriteLine("[WARN] JWT Key config'den okunamadı, default değer kullanılabilir.");
+// Varsayılan anahtar yok: tahmin edilebilir bir anahtarla token imzalamaktansa hiç açılmamak daha güvenli.
+// HMAC-SHA256 için en az 32 byte gerekir.
+if (string.IsNullOrWhiteSpace(keyParam) || Encoding.UTF8.GetByteCount(keyParam) < 32)
+    throw new InvalidOperationException("JWT anahtarı eksik veya 32 karakterden kısa! 'Jwt__Key' ortam değişkenini ayarlayın.");
 
-var keyBytes = Encoding.UTF8.GetBytes(keyParam ?? "super-secret-key-change-this-32chars-min");
+var keyBytes = Encoding.UTF8.GetBytes(keyParam);
 
 builder.Services
     .AddAuthentication(options =>

@@ -1,6 +1,7 @@
 // Controllers/PronunciationController.cs
 
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -24,9 +25,8 @@ namespace DktApi.Controllers
         private readonly CloudinaryService _cloudinary;
         private readonly PronunciationScoringService _scoringService;
 
-        private const string HARDCODED_USER = "meryem.kilic";
-        private const string HARDCODED_PASS = "Melv18309";
-        private const string HARDCODED_KEY = "20251224164351-fQaj7AdeKhp-87831";
+        // FluentMe hesap bilgileri ortam değişkenlerinden gelir (bkz. FluentMeOptions)
+        private readonly FluentMeOptions _fluentMe;
 
         private static string? _cachedToken;
         private static DateTime _tokenExpiry = DateTime.MinValue;
@@ -41,11 +41,13 @@ namespace DktApi.Controllers
         public PronunciationController(
             IHttpClientFactory httpClientFactory, 
             CloudinaryService cloudinary,
-            PronunciationScoringService scoringService)
+            PronunciationScoringService scoringService,
+            IOptions<FluentMeOptions> fluentMeOptions)
         {
             _httpClientFactory = httpClientFactory;
             _cloudinary = cloudinary;
             _scoringService = scoringService;
+            _fluentMe = fluentMeOptions.Value;
         }
 
         [HttpPost("check")]
@@ -64,6 +66,10 @@ namespace DktApi.Controllers
 
             if (string.IsNullOrWhiteSpace(text))
                 return BadRequest(new { message = "Text alanı boş." });
+
+            // Eksik ayar açılışta bir kez loglanır (Program.cs)
+            if (!_fluentMe.IsConfigured)
+                return StatusCode(503, new { message = "Telaffuz servisi yapılandırılmamış." });
 
             // audio_file (Unity) veya audioFile (Postman)
             IFormFile? audioFile = null;
@@ -329,7 +335,7 @@ namespace DktApi.Controllers
             req.Headers.Accept.Clear();
             req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             req.Headers.Add("x-access-token", token);
-            req.Headers.Add("x-api-key", HARDCODED_KEY);
+            req.Headers.Add("x-api-key", _fluentMe.ApiKey);
 
             var bodyJson = JsonSerializer.Serialize(new { audio_provided = audioUrl });
             req.Content = new StringContent(bodyJson, Encoding.UTF8, "application/json");
@@ -374,7 +380,7 @@ namespace DktApi.Controllers
             using var req = new HttpRequestMessage(HttpMethod.Post, FLUENT_POST);
 
             req.Headers.Add("x-access-token", token);
-            req.Headers.Add("x-api-key", HARDCODED_KEY);
+            req.Headers.Add("x-api-key", _fluentMe.ApiKey);
             req.Headers.Accept.Clear();
             req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
@@ -405,10 +411,10 @@ namespace DktApi.Controllers
             if (!string.IsNullOrEmpty(_cachedToken) && DateTime.Now < _tokenExpiry)
                 return _cachedToken!;
 
-            var loginJson = JsonSerializer.Serialize(new { username = HARDCODED_USER, password = HARDCODED_PASS });
+            var loginJson = JsonSerializer.Serialize(new { username = _fluentMe.User, password = _fluentMe.Password });
 
             using var postReq = new HttpRequestMessage(HttpMethod.Post, FLUENT_LOGIN);
-            postReq.Headers.Add("x-api-key", HARDCODED_KEY);
+            postReq.Headers.Add("x-api-key", _fluentMe.ApiKey);
             postReq.Headers.Accept.Clear();
             postReq.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             postReq.Content = new StringContent(loginJson, Encoding.UTF8, "application/json");
@@ -423,12 +429,12 @@ namespace DktApi.Controllers
                 return _cachedToken!;
             }
 
-            var authBytes = Encoding.ASCII.GetBytes($"{HARDCODED_USER}:{HARDCODED_PASS}");
+            var authBytes = Encoding.ASCII.GetBytes($"{_fluentMe.User}:{_fluentMe.Password}");
             var authString = Convert.ToBase64String(authBytes);
 
             using var getReq = new HttpRequestMessage(HttpMethod.Get, FLUENT_LOGIN);
             getReq.Headers.Authorization = new AuthenticationHeaderValue("Basic", authString);
-            getReq.Headers.Add("x-api-key", HARDCODED_KEY);
+            getReq.Headers.Add("x-api-key", _fluentMe.ApiKey);
             getReq.Headers.Accept.Clear();
             getReq.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
