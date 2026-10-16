@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace DktApi.Models.Db;
 
@@ -19,6 +20,8 @@ public class Therapist
     [Column("email")]
     public string Email { get; set; } = string.Empty;
 
+    // Şifre hiçbir API yanıtında JSON'a yazılmaz (entity doğrudan dönülse bile)
+    [JsonIgnore]
     [Column("password")]
     public string Password { get; set; } = string.Empty;
 
