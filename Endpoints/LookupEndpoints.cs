@@ -1,5 +1,6 @@
 using DktApi.Models.Db;
 using DktApi.Models.Game;
+using DktApi.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 
@@ -47,9 +48,38 @@ public static class LookupEndpoints
                 })
                 .OrderBy(g => g.Name)
                 .ToListAsync();
-            
+
+            // Atanabilirlik kod tarafında (GameAvailability); SQL'e çevrilmez
+            foreach (var g in games)
+                g.Assignable = GameAvailability.IsPlayable(g.Id);
+
             return Results.Ok(games);
         }).WithTags("Lookup").WithName("GetGames");
+
+        // ----------------------------------------------------
+        // GET /api/lookup/games/{gameId}/letters
+        // Bu oyunun görev olarak atanabileceği harfler (içeriği olanlar).
+        // Oyun Fonem'de yoksa boş liste döner.
+        // ----------------------------------------------------
+        app.MapGet("/api/lookup/games/{gameId:long}/letters", async (long gameId, AppDbContext db) =>
+        {
+            if (!await db.Games.AnyAsync(g => g.Id == gameId))
+                return Results.NotFound(new { message = GameAvailability.Describe("game_not_found") });
+
+            if (!GameAvailability.IsPlayable(gameId))
+                return Results.Ok(Array.Empty<object>());
+
+            var letters = db.Letters.AsQueryable();
+            if (GameAvailability.RequiresAssetSet(gameId))
+                letters = letters.Where(l => db.AssetSets.Any(a => a.GameId == gameId && a.LetterId == l.Id));
+
+            var result = await letters
+                .OrderBy(l => l.Code)
+                .Select(l => new { l.Id, l.Code, l.DisplayName })
+                .ToListAsync();
+
+            return Results.Ok(result);
+        }).WithTags("Lookup").WithName("GetAssignableLettersForGame");
         
         // ----------------------------------------------------
         // Opsiyonel: GET /api/lookup/gametypes (Oyun Tiplerini Listele)

@@ -1,5 +1,6 @@
 using DktApi.Models.Db;
 using DktApi.Dtos.Tasks;
+using DktApi.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace DktApi.Endpoints;
@@ -21,6 +22,16 @@ public static class TaskEndpoints
             var playerExists = await db.Players.AnyAsync(p => p.Id == req.PlayerId);
             if (!playerExists)
                 return Results.BadRequest("Player not found");
+
+            // Çocuğun oynayamayacağı görev atanmasın (PR-28): Fonem'de olmayan oyun
+            // ya da seçilen harf için içeriği olmayan oyun
+            var assignmentError = GameAvailability.ValidateAssignment(
+                req.GameId,
+                gameExists: await db.Games.AnyAsync(g => g.Id == req.GameId),
+                letterExists: await db.Letters.AnyAsync(l => l.Id == req.LetterId),
+                hasAssetSet: await db.AssetSets.AnyAsync(a => a.GameId == req.GameId && a.LetterId == req.LetterId));
+            if (assignmentError != null)
+                return Results.BadRequest(new { message = GameAvailability.Describe(assignmentError), code = assignmentError });
 
             var task = new TaskItem
             {
