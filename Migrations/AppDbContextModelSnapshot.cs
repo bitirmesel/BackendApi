@@ -32,7 +32,6 @@ namespace DktApi.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
                     b.Property<string>("AssetJson")
-                        .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("asset_json");
 
@@ -533,7 +532,6 @@ namespace DktApi.Migrations
                         .HasColumnName("diagnosis");
 
                     b.Property<string>("Email")
-                        .IsRequired()
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)")
                         .HasColumnName("email");
@@ -570,7 +568,6 @@ namespace DktApi.Migrations
                         .HasColumnName("parent_phone");
 
                     b.Property<string>("Password")
-                        .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
                         .HasColumnName("password");
