@@ -29,6 +29,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <!-- Test projesi ayrı derlenir; web projesi kök klasördeki tüm .cs dosyalarını varsayılan olarak aldığından hariç tutulur -->
+  <ItemGroup>
+    <Compile Remove="tests/**" />
+    <Content Remove="tests/**" />
+    <None Remove="tests/**" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="CloudinaryDotNet" Version="1.27.0" />
     

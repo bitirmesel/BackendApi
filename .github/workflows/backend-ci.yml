@@ -33,7 +33,8 @@ jobs:
       - name: Build
         run: dotnet build DktApi.csproj --no-restore -c Release
 
-      # Test projesi eklendiğinde (ROADMAP PR-16) buraya `dotnet test` adımı gelecek.
+      - name: Test
+        run: dotnet test tests/DktApi.Tests -c Release --logger "console;verbosity=normal"
 
   docker:
     name: docker build (Render imajı)
