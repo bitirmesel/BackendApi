@@ -1,0 +1,45 @@
+# Backend CI — her PR'da ve main'e her push'ta çalışır.
+# Amaç: kırık kodun main'e (dolayısıyla Render'a) gitmesini engellemek.
+name: Backend CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Aynı dala yeni push gelirse eski çalışmayı iptal et
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: dotnet build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore DktApi.csproj
+
+      - name: Build
+        run: dotnet build DktApi.csproj --no-restore -c Release
+
+      # Test projesi eklendiğinde (ROADMAP PR-16) buraya `dotnet test` adımı gelecek.
+
+  docker:
+    name: docker build (Render imajı)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t dktapi-ci .
