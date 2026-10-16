@@ -67,11 +67,9 @@ namespace DktApi.Controllers
             if (string.IsNullOrWhiteSpace(text))
                 return BadRequest(new { message = "Text alanı boş." });
 
+            // Eksik ayar açılışta bir kez loglanır (Program.cs)
             if (!_fluentMe.IsConfigured)
-            {
-                Console.WriteLine("[PRON] FluentMe ayarları eksik: FluentMe__User / FluentMe__Password / FluentMe__ApiKey");
                 return StatusCode(503, new { message = "Telaffuz servisi yapılandırılmamış." });
-            }
 
             // audio_file (Unity) veya audioFile (Postman)
             IFormFile? audioFile = null;

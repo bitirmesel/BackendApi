@@ -16,7 +16,7 @@ ParroTalk'un ASP.NET Core 8 backend'i. Unity çocuk uygulaması ve Flutter terap
 
 | Ortam değişkeni | Zorunlu | Açıklama |
 |---|---|---|
-| `ConnectionStrings__Pg` | ✅ | PostgreSQL bağlantı cümlesi (`Host=...;Port=5432;Database=...;Username=...;Password=...;SslMode=Require`). Yoksa `DATABASE_URL` denenir. |
+| `ConnectionStrings__Pg` | ✅ | PostgreSQL bağlantı cümlesi (`Host=...;Port=5432;Database=...;Username=...;Password=...;SslMode=Require`). Yoksa `DATABASE_URL` denenir (Render'ın `postgres://...` biçimi de desteklenir). |
 | `Jwt__Key` | ✅ | JWT imzalama anahtarı, **en az 32 karakter**. Eksikse uygulama açılmaz. |
 | `FluentMe__User`, `FluentMe__Password`, `FluentMe__ApiKey` | Kelime telaffuzu için | Eksikse uygulama açılır ama `/api/pronunciation/check` 503 döner. |
 | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Medya ve telaffuz için | Cloudinary hesabı. |

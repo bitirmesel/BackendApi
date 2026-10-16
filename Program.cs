@@ -4,6 +4,8 @@ using DktApi.Models.Db;
 using DktApi.Services; 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Npgsql;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using DktApi.Repositories;
@@ -21,9 +23,9 @@ var builder = WebApplication.CreateBuilder(args);
 // Gerekli ortam değişkenleri için README.md'ye bakın.
 Console.WriteLine($"[STARTUP] Uygulama başlatılıyor... Ortam: {builder.Environment.EnvironmentName}");
 
-builder.Services.Configure<FluentMeOptions>(builder.Configuration.GetSection(FluentMeOptions.SectionName));
-
+// Tek kaynaktan oku, aynı örneği DI'a ver (controller IOptions<FluentMeOptions> ile alır)
 var fluentMe = builder.Configuration.GetSection(FluentMeOptions.SectionName).Get<FluentMeOptions>() ?? new FluentMeOptions();
+builder.Services.AddSingleton(Options.Create(fluentMe));
 if (!fluentMe.IsConfigured)
 {
     // Uygulamayı durdurmuyoruz: yalnızca /api/pronunciation/check etkilenir.
@@ -42,6 +44,23 @@ if (string.IsNullOrWhiteSpace(connStr))
     
     if (string.IsNullOrWhiteSpace(connStr))
         throw new InvalidOperationException("Veritabanı bağlantısı bulunamadı! 'ConnectionStrings__Pg' ortam değişkenini (yerelde user-secrets) ayarlayın.");
+}
+
+// Render'ın verdiği URL biçimi (postgres://user:pass@host:port/db) Npgsql'de çalışmaz → anahtar=değer biçimine çevir
+if (connStr.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) ||
+    connStr.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+{
+    var dbUri = new Uri(connStr);
+    var userInfo = dbUri.UserInfo.Split(':', 2);
+    connStr = new NpgsqlConnectionStringBuilder
+    {
+        Host = dbUri.Host,
+        Port = dbUri.Port > 0 ? dbUri.Port : 5432,
+        Database = Uri.UnescapeDataString(dbUri.AbsolutePath.TrimStart('/')),
+        Username = Uri.UnescapeDataString(userInfo[0]),
+        Password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : null,
+        SslMode = SslMode.Require
+    }.ConnectionString;
 }
 
 builder.Services.AddDbContext<AppDbContext>(options =>
