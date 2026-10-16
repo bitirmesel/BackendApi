@@ -6,12 +6,12 @@ namespace DktApi.Dtos.Tasks
     /// <summary>
     /// Oyuncu görev listesi yanıtı: GET /api/players/{id}/tasks ve /tasks/active.
     /// Düz alanlar eski istemciler için korunur; iç içe <see cref="Game"/> Fonem'in görev → oyun
-    /// yönlendirmesi (oyun tipi, zorluk) içindir.
+    /// yönlendirmesi (oyun tipi, zorluk), <see cref="Therapist"/> profil ve görev kartı içindir.
     /// Alan eklemek serbest, var olanı kaldırmak/yeniden adlandırmak istemcileri kırar.
     ///
-    /// ⚠️ therapistId / therapist BİLEREK yok: Fonem therapistId > 0 görünce terapistin TÜM
-    /// öğrencilerinin bildirim akışını (çocuk adlarıyla) rozet ve yedek listede kullanıyor.
-    /// Fonem bu yolları /players/{id}/inbox'a taşıdıktan sonra eklenecek (ROADMAP PR-07 → PR-06b).
+    /// ⚠️ therapistId, Fonem PR-07 (Fonem#19) öncesi sürümlerde terapistin TÜM öğrencilerinin
+    /// bildirim akışını (çocuk adlarıyla) açar. Bu alanlar yalnızca PR-07'li sürüm cihazlara
+    /// yüklendikten sonra yayına alınmalıdır (ROADMAP PR-06b).
     /// </summary>
     public class PlayerTaskDto
     {
@@ -27,6 +27,9 @@ namespace DktApi.Dtos.Tasks
         public DateTime? AssignedAt { get; set; }
         public DateTime? DueAt { get; set; }
 
+        public long TherapistId { get; set; }
+        public string TherapistName { get; set; } = string.Empty;
+
         /// <summary>SYLLABLE | WORD | SENTENCE (game_types.code)</summary>
         public string GameTypeCode { get; set; } = string.Empty;
 
@@ -34,6 +37,7 @@ namespace DktApi.Dtos.Tasks
         public int DifficultyLevel { get; set; }
 
         public PlayerTaskGameDto Game { get; set; } = new();
+        public PlayerTaskTherapistDto Therapist { get; set; } = new();
 
         /// <summary>EF Core'un SQL'e çevirdiği projeksiyon (Include gerekmez).</summary>
         public static readonly Expression<Func<TaskItem, PlayerTaskDto>> Projection = t => new PlayerTaskDto
@@ -49,6 +53,8 @@ namespace DktApi.Dtos.Tasks
             Status = t.Status,
             AssignedAt = t.AssignedAt,
             DueAt = t.DueAt,
+            TherapistId = t.TherapistId,
+            TherapistName = t.Therapist.Name,
             GameTypeCode = t.Game.GameType.Code,
             DifficultyLevel = t.Game.DifficultyLevel.Level,
             Game = new PlayerTaskGameDto
@@ -69,6 +75,12 @@ namespace DktApi.Dtos.Tasks
                     Level = t.Game.DifficultyLevel.Level,
                     Name = t.Game.DifficultyLevel.Name
                 }
+            },
+            Therapist = new PlayerTaskTherapistDto
+            {
+                Id = t.TherapistId,
+                Name = t.Therapist.Name,
+                ClinicName = t.Therapist.ClinicName
             }
         };
     }
@@ -95,5 +107,13 @@ namespace DktApi.Dtos.Tasks
         public long Id { get; set; }
         public int Level { get; set; }
         public string Name { get; set; } = string.Empty;
+    }
+
+    /// <summary>Çocuğa gösterilecek kadar terapist bilgisi (e-posta/telefon/lisans yok).</summary>
+    public class PlayerTaskTherapistDto
+    {
+        public long Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string? ClinicName { get; set; }
     }
 }
