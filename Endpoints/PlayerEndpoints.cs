@@ -70,13 +70,23 @@ public static class PlayerEndpoints
                 return Results.BadRequest("Therapist not found.");
             }
 
+            // Şifreli öğrenci kullanıcı adıyla giriş yapacak: ad harf duyarsız benzersiz olmalı.
+            // Şifresiz öğrenci giriş yapamadığı için (B24) aynı ad serbest.
+            var studentNickname = string.IsNullOrWhiteSpace(req.Nickname) ? req.Name : req.Nickname;
+            if (!string.IsNullOrEmpty(req.Password))
+            {
+                var nickNorm = PlayerLoginResolver.NormalizeNickname(studentNickname);
+                if (await db.Players.AnyAsync(p => p.Nickname.ToLower() == nickNorm))
+                    return Results.BadRequest(new { message = "Bu kullanıcı adı alınmış." });
+            }
+
             var now = DateTime.UtcNow;
 
             // Player kaydı
             var player = new Player
             {
                 Name = req.Name,
-                Nickname = string.IsNullOrWhiteSpace(req.Nickname) ? req.Name : req.Nickname,
+                Nickname = studentNickname,
                 Email = EmailNormalizer.Normalize(req.Email),
                 // Şifresiz öğrenci mümkün (B24); varsa yalnızca hash saklanır (PR-13)
                 PasswordHash = string.IsNullOrEmpty(req.Password) ? null : passwords.Hash(req.Password),
@@ -241,7 +251,8 @@ app.MapGet("/api/players", async (AppDbContext db) =>
             var v = req.Nickname.Trim();
             if (v.Length == 0)
                 return Results.BadRequest(new { error = "Kullanıcı adı boş olamaz." });
-            var nickTaken = await db.Players.AnyAsync(p => p.Id != id && p.Nickname == v);
+            var vNorm = PlayerLoginResolver.NormalizeNickname(v);
+            var nickTaken = await db.Players.AnyAsync(p => p.Id != id && p.Nickname.ToLower() == vNorm);
             if (nickTaken)
                 return Results.Conflict(new { error = "Bu kullanıcı adı kullanılıyor." });
             if (player.Nickname != v)
