@@ -117,4 +117,29 @@ public class PasswordBackfillTests : IDisposable
             Assert.Equal((0, 0), again);
         }
     }
+
+    [Fact]
+    public async Task Sifre_degistiyse_backfill_yeni_hashi_ezmez()
+    {
+        long id;
+        using (var db = CreateDb())
+        {
+            var p = new Player { Name = "E", Nickname = "e", Password = "eski" };
+            db.Players.Add(p);
+            await db.SaveChangesAsync();
+            id = p.Id;
+        }
+
+        // Backfill okuduktan sonra kullanıcı şifresini değiştirmiş gibi: koşullu yazma eşleşmemeli
+        var newHash = _passwords.Hash("yeni");
+        using (var db = CreateDb())
+        {
+            await db.Players.Where(x => x.Id == id)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.PasswordHash, newHash).SetProperty(x => x.Password, (string?)null));
+            var (players, _) = await PasswordBackfill.RunAsync(db, _passwords);
+            Assert.Equal(0, players);
+            var e = await db.Players.AsNoTracking().SingleAsync(x => x.Id == id);
+            Assert.Equal(newHash, e.PasswordHash);
+        }
+    }
 }

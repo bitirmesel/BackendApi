@@ -15,20 +15,34 @@ public static class PasswordBackfill
     public static async Task<(int players, int therapists)> RunAsync(
         AppDbContext db, PasswordService passwords, CancellationToken ct = default)
     {
-        var players = await db.Players
+        var players = await db.Players.AsNoTracking()
             .Where(p => p.PasswordHash == null && p.Password != null && p.Password != "")
+            .Select(p => new { p.Id, p.Password })
             .ToListAsync(ct);
+        var playerCount = 0;
         foreach (var p in players)
-            p.PasswordHash = HashVerified(passwords, p.Password!);
+        {
+            var hash = HashVerified(passwords, p.Password!);
+            // Koşullu yazma: hash'leme sürerken şifre değiştiyse (ya da giriş hash'i yazdıysa) dokunma
+            playerCount += await db.Players
+                .Where(x => x.Id == p.Id && x.PasswordHash == null && x.Password == p.Password)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.PasswordHash, hash), ct);
+        }
 
-        var therapists = await db.Therapists
+        var therapists = await db.Therapists.AsNoTracking()
             .Where(t => t.PasswordHash == null && t.Password != null && t.Password != "")
+            .Select(t => new { t.Id, t.Password })
             .ToListAsync(ct);
+        var therapistCount = 0;
         foreach (var t in therapists)
-            t.PasswordHash = HashVerified(passwords, t.Password!);
+        {
+            var hash = HashVerified(passwords, t.Password!);
+            therapistCount += await db.Therapists
+                .Where(x => x.Id == t.Id && x.PasswordHash == null && x.Password == t.Password)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.PasswordHash, hash), ct);
+        }
 
-        await db.SaveChangesAsync(ct);
-        return (players.Count, therapists.Count);
+        return (playerCount, therapistCount);
     }
 
     /// <summary>Yazmadan önce hash'in gerçekten doğrulandığından emin olur.</summary>
