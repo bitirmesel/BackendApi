@@ -133,58 +133,32 @@ public static class TaskEndpoints
                 return Results.Ok(notifications);
             });
 
-            // 4) PLAYER İÇİN AKTİF GÖREVLER – UNITY
-            // GET /api/players/{playerId}/tasks/active
+            // 4) PLAYER İÇİN AKTİF GÖREVLER
+            // GET /api/players/{playerId}/tasks/active — yanıt: PlayerTaskDto
             app.MapGet("/api/players/{playerId:long}/tasks/active",
             async (long playerId, AppDbContext db) =>
             {
                 var tasks = await db.TaskItems
-                    .Include(t => t.Game)
-                    .Include(t => t.Letter)
+                    .AsNoTracking()
                     .Where(t => t.PlayerId == playerId && t.Status == "ASSIGNED")
                     .OrderBy(t => t.DueAt ?? t.AssignedAt)
+                    .Select(PlayerTaskDto.Projection)
                     .ToListAsync();
 
-                var result = tasks.Select(t => new
-                {
-                    taskId = t.Id,
-                    gameId = t.GameId,
-                    gameName = t.Game.Name,
-                    letterId = t.LetterId,
-                    letterCode = t.Letter.Code,
-                    letterDisplayName = t.Letter.DisplayName,
-                    assetSetId = t.AssetSetId,
-                    status = t.Status,
-                    assignedAt = t.AssignedAt,
-                    dueAt = t.DueAt
-                });
-
-                return Results.Ok(result);
+                return Results.Ok(tasks);
             })
             .WithTags("Tasks")
             .WithName("GetPlayerActiveTasks");
 
-            // 4) PLAYER İÇİN TÜM ATANMIŞ GÖREVLER — GET /api/players/{playerId}/tasks
+            // 4) PLAYER İÇİN TÜM ATANMIŞ GÖREVLER — GET /api/players/{playerId}/tasks — yanıt: PlayerTaskDto
 app.MapGet("/api/players/{playerId:long}/tasks",
     async (long playerId, AppDbContext db) =>
 {
     var tasks = await db.TaskItems
+        .AsNoTracking()
         .Where(t => t.PlayerId == playerId)
-        .Include(t => t.Game)
-        .Include(t => t.Letter)
         .OrderByDescending(t => t.AssignedAt)
-        .Select(t => new 
-        {
-            taskId = t.Id,
-            gameId = t.GameId,
-            gameName = t.Game!.Name,
-            letterId = t.LetterId,
-            letterCode = t.Letter!.Code,
-            note = t.Note,
-            status = t.Status,
-            assignedAt = t.AssignedAt,
-            dueAt = t.DueAt
-        })
+        .Select(PlayerTaskDto.Projection)
         .ToListAsync();
 
     return Results.Ok(tasks);
