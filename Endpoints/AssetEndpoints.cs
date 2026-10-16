@@ -58,8 +58,9 @@ public static class AssetEndpoints
             }
             catch (Exception ex)
             {
+                var errorId = ErrorLog.Log("POST /api/assets/create", ex);
                 return Results.Problem(
-                    detail: ex.Message + " | Inner: " + (ex.InnerException?.Message ?? "-"),
+                    detail: $"Asset seti kaydedilemedi. Hata kodu: {errorId}",
                     statusCode: 500
                 );
             }
@@ -205,8 +206,9 @@ public static class AssetEndpoints
             }
             catch (Exception ex)
             {
+                var errorId = ErrorLog.Log("PUT /api/assets/{gameId}/{letterId}/json", ex);
                 return Results.Json(
-                    new { error = ex.Message, inner = ex.InnerException?.Message ?? "-" },
+                    new { error = "Asset JSON güncellenemedi.", errorId },
                     statusCode: 500
                 );
             }

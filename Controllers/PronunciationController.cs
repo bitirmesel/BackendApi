@@ -316,7 +316,8 @@ namespace DktApi.Controllers
                     message = ex.Message,
                     stackTrace = ex.ToString()
                 }));
-                return StatusCode(500, new { message = "Sunucu Hatası", detail = ex.Message });
+                // Detay yukarıda requestId ile loglandı; istemciye exception / dış servis mesajı dönülmez
+                return StatusCode(500, new { message = "Sunucu Hatası", errorId = requestId });
             }
         }
 
