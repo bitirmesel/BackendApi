@@ -26,10 +26,16 @@ public class Player
     public string? Email { get; set; }
 
     // Şifre hiçbir API yanıtında JSON'a yazılmaz (entity doğrudan dönülse bile)
+    // Eski düz metin şifre; yalnızca okunur ve hash'e taşınır (PR-13). Yeni şifre buraya yazılmaz.
     [JsonIgnore]
     [Column("password")]
     [MaxLength(255)]
     public string? Password { get; set; }
+
+    /// <summary>ASP.NET Core PasswordHasher çıktısı (PR-13). Bkz. PasswordService.</summary>
+    [JsonIgnore]
+    [Column("password_hash")]
+    public string? PasswordHash { get; set; }
 
     [Column("birth_date")]
     public DateTime? BirthDate { get; set; }

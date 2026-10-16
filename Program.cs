@@ -66,6 +66,9 @@ builder.Services.AddScoped<CloudinaryService>();
 builder.Services.AddScoped<JwtHelper>();
 builder.Services.AddScoped<PronunciationScoringService>();
 builder.Services.AddScoped<WhisperService>();
+builder.Services.AddSingleton<PasswordService>();
+// Hash'i olmayan eski şifreleri açılıştan sonra arka planda hash'ler (PR-13)
+builder.Services.AddHostedService<PasswordBackfillService>();
 
 // Controller desteği
 builder.Services.AddControllers(); 

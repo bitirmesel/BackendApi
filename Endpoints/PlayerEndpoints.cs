@@ -61,7 +61,7 @@ public static class PlayerEndpoints
         // POST /api/students
         // Body: CreateStudentRequest
         // ----------------------------------------------------
-        app.MapPost("/api/students", async ([FromBody] CreateStudentRequest req, AppDbContext db) =>
+        app.MapPost("/api/students", async ([FromBody] CreateStudentRequest req, AppDbContext db, PasswordService passwords) =>
         {
             // Terapist var mı kontrol et
             var therapist = await db.Therapists.FindAsync(req.TherapistId);
@@ -78,7 +78,8 @@ public static class PlayerEndpoints
                 Name = req.Name,
                 Nickname = string.IsNullOrWhiteSpace(req.Nickname) ? req.Name : req.Nickname,
                 Email = EmailNormalizer.Normalize(req.Email),
-                Password = req.Password,
+                // Şifresiz öğrenci mümkün (B24); varsa yalnızca hash saklanır (PR-13)
+                PasswordHash = string.IsNullOrEmpty(req.Password) ? null : passwords.Hash(req.Password),
                 BirthDate = req.BirthDate,
                 Gender = req.Gender,
                 Diagnosis = req.Diagnosis,
@@ -214,7 +215,8 @@ app.MapGet("/api/players", async (AppDbContext db) =>
     private static async Task<IResult> PatchPlayerAsync(
         long id,
         [FromBody] UpdatePlayerRequest req,
-        AppDbContext db)
+        AppDbContext db,
+        PasswordService passwords)
     {
         var player = await db.Players.FirstOrDefaultAsync(p => p.Id == id);
         if (player is null)
@@ -268,11 +270,10 @@ app.MapGet("/api/players", async (AppDbContext db) =>
         {
             if (string.IsNullOrWhiteSpace(req.Password))
                 return Results.BadRequest(new { error = "Şifre boş olamaz." });
-            if (player.Password != req.Password)
-            {
-                player.Password = req.Password;
-                changed = true;
-            }
+            // Yeni şifre yalnızca hash olarak; eski düz metin artık geçersiz (PR-13)
+            player.PasswordHash = passwords.Hash(req.Password);
+            player.Password = null;
+            changed = true;
         }
 
         if (req.BirthDate.HasValue)
