@@ -19,15 +19,17 @@ public class Player
     [MaxLength(100)]
     public string Name { get; set; } = string.Empty;
 
+    // Terapistin oluşturduğu öğrencilerde e-posta olmayabilir (POST /api/students) → DB'de NULL.
+    // NULL olamaz tanımlıyken EF bu satırları okurken hata veriyordu (GET /api/players 500).
     [Column("email")]
     [MaxLength(150)]
-    public string Email { get; set; } = string.Empty;
+    public string? Email { get; set; }
 
     // Şifre hiçbir API yanıtında JSON'a yazılmaz (entity doğrudan dönülse bile)
     [JsonIgnore]
     [Column("password")]
     [MaxLength(255)]
-    public string Password { get; set; } = string.Empty;
+    public string? Password { get; set; }
 
     [Column("birth_date")]
     public DateTime? BirthDate { get; set; }
