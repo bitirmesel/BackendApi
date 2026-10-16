@@ -228,10 +228,11 @@ public static class InvitationEndpoints
                     message = "Bağlantı isteğiniz gönderildi. Onay bekleniyor.",
                 });
             }
-            catch
+            catch (Exception ex)
             {
                 await tx.RollbackAsync();
-                return Results.Json(new { error = "İşlem sırasında hata oluştu. Tekrar deneyin." }, statusCode: 500);
+                var errorId = ErrorLog.Log("POST /api/invitations/redeem", ex);
+                return Results.Json(new { error = "İşlem sırasında hata oluştu. Tekrar deneyin.", errorId }, statusCode: 500);
             }
         })
         .WithTags("Invitations")
