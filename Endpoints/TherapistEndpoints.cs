@@ -2,6 +2,7 @@ using DktApi.Dtos.Therapist;
 using DktApi.Models.Db;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using DktApi.Services;
 
 namespace DktApi.Endpoints;
 
@@ -30,11 +31,11 @@ public static class TherapistEndpoints
 
             if (!string.IsNullOrWhiteSpace(req.Email))
             {
-                var newEmail = req.Email.Trim().ToLowerInvariant();
+                var newEmail = EmailNormalizer.Normalize(req.Email)!;
                 if (newEmail != therapist.Email)
                 {
                     var emailTaken = await db.Therapists
-                        .AnyAsync(x => x.Id != therapist.Id && x.Email == newEmail);
+                        .AnyAsync(x => x.Id != therapist.Id && x.Email.ToLower() == newEmail);
                     if (emailTaken)
                         return Results.BadRequest(new { message = "Bu e-posta başka bir hesapta kullanılıyor." });
                     therapist.Email = newEmail;

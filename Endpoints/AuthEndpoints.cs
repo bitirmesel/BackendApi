@@ -3,6 +3,7 @@ using DktApi.Models.Db;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using DktApi.Services;
 
 namespace DktApi.Endpoints;
 
@@ -17,10 +18,11 @@ public static class AuthEndpoints
             AppDbContext db,
             JwtHelper jwtHelper) =>
         {
-            // Email veya Username ile terapisti bul
+            // Email (harf duyarsız, B23) veya Username ile terapisti bul
+            var email = EmailNormalizer.Normalize(req.Email);
             var therapist = await db.Therapists
                 .FirstOrDefaultAsync(t =>
-                    (req.Email != null && t.Email == req.Email) ||
+                    (email != null && t.Email.ToLower() == email) ||
                     (req.Username != null && t.Username == req.Username));
 
             // Kullanıcı yoksa veya şifre yanlışsa
@@ -54,9 +56,10 @@ public static class AuthEndpoints
                 return Results.BadRequest(new { message = "Şifreler eşleşmemektedir." });
             }
 
-            // 2. E-posta Kontrolü
+            // 2. E-posta Kontrolü (harf duyarsız, B23)
+            var email = EmailNormalizer.Normalize(req.Email);
             var existingEmail = await db.Therapists
-                .AnyAsync(t => t.Email == req.Email);
+                .AnyAsync(t => t.Email.ToLower() == email);
 
             if (existingEmail)
             {
@@ -77,7 +80,7 @@ public static class AuthEndpoints
             {
                 Name = req.FullName,
                 Username = req.Username,
-                Email = req.Email,
+                Email = email!,
                 // TODO: Gerçek uygulamada şifre HASH'lenmelidir (örn: Argon2, BCrypt)
                 Password = req.Password,
                 ClinicName = req.ClinicName,
@@ -156,7 +159,8 @@ public static class AuthEndpoints
         return Results.BadRequest(new { message = "Kullanıcı adı alınmış." });
     }
 
-    var emailExists = await db.Players.AnyAsync(p => p.Email == req.Email);
+    var email = EmailNormalizer.Normalize(req.Email);
+    var emailExists = await db.Players.AnyAsync(p => p.Email != null && p.Email.ToLower() == email);
     if (emailExists)
     {
         return Results.BadRequest(new { message = "E-posta zaten kayıtlı." });
@@ -168,7 +172,7 @@ public static class AuthEndpoints
     {
         Nickname = req.Nickname,
         Name = req.Name,
-        Email = req.Email,
+        Email = email,
         Password = req.Password,
         BirthDate = req.BirthDate,
         CreatedAt = now,
