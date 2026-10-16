@@ -2,6 +2,7 @@ using DktApi.Models.Db;
 using DktApi.Dtos.Player; // CreateStudentRequest burada
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using DktApi.Services;
 
 namespace DktApi.Endpoints;
 
@@ -76,7 +77,7 @@ public static class PlayerEndpoints
             {
                 Name = req.Name,
                 Nickname = string.IsNullOrWhiteSpace(req.Nickname) ? req.Name : req.Nickname,
-                Email = req.Email,
+                Email = EmailNormalizer.Normalize(req.Email),
                 Password = req.Password,
                 BirthDate = req.BirthDate,
                 Gender = req.Gender,
@@ -250,10 +251,10 @@ app.MapGet("/api/players", async (AppDbContext db) =>
 
         if (req.Email is not null)
         {
-            var v = req.Email.Trim();
+            var v = EmailNormalizer.Normalize(req.Email)!;
             if (v.Length == 0)
                 return Results.BadRequest(new { error = "E-posta boş olamaz." });
-            var emailTaken = await db.Players.AnyAsync(p => p.Id != id && p.Email == v);
+            var emailTaken = await db.Players.AnyAsync(p => p.Id != id && p.Email != null && p.Email.ToLower() == v);
             if (emailTaken)
                 return Results.Conflict(new { error = "Bu e-posta başka bir hesapta kayıtlı." });
             if (player.Email != v)
