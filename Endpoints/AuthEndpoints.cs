@@ -16,7 +16,8 @@ public static class AuthEndpoints
         app.MapPost("/api/auth/login", async (
             [FromBody] LoginRequest req,
             AppDbContext db,
-            JwtHelper jwtHelper) =>
+            JwtHelper jwtHelper,
+            PasswordService passwords) =>
         {
             // Email (harf duyarsız, B23) veya Username ile terapisti bul
             var email = EmailNormalizer.Normalize(req.Email);
@@ -26,9 +27,18 @@ public static class AuthEndpoints
                     (req.Username != null && t.Username == req.Username));
 
             // Kullanıcı yoksa veya şifre yanlışsa
-            if (therapist is null || therapist.Password != req.Password)
-            {
+            if (therapist is null)
                 return Results.Unauthorized();
+
+            var check = passwords.Check(therapist.PasswordHash, therapist.Password, req.Password);
+            if (!PasswordService.IsSuccess(check))
+                return Results.Unauthorized();
+
+            // Düz metinden ya da eski hash'ten geldiyse hash'i güncelle (PR-13)
+            if (check == PasswordCheckResult.SucceededNeedsUpgrade)
+            {
+                therapist.PasswordHash = passwords.Hash(req.Password);
+                await db.SaveChangesAsync();
             }
             
             // JWT Token Generate Et
@@ -48,9 +58,13 @@ public static class AuthEndpoints
         app.MapPost("/api/auth/register", async (
             [FromBody] RegisterRequest req,
             AppDbContext db,
-            JwtHelper jwtHelper) =>
+            JwtHelper jwtHelper,
+            PasswordService passwords) =>
         {
             // 1. Şifre Doğrulama Kontrolü
+            if (string.IsNullOrEmpty(req.Password))
+                return Results.BadRequest(new { message = "Şifre zorunludur." });
+
             if (req.Password != req.VerifyPassword)
             {
                 return Results.BadRequest(new { message = "Şifreler eşleşmemektedir." });
@@ -81,8 +95,7 @@ public static class AuthEndpoints
                 Name = req.FullName,
                 Username = req.Username,
                 Email = email!,
-                // TODO: Gerçek uygulamada şifre HASH'lenmelidir (örn: Argon2, BCrypt)
-                Password = req.Password,
+                PasswordHash = passwords.Hash(req.Password),
                 ClinicName = req.ClinicName,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
@@ -109,15 +122,22 @@ public static class AuthEndpoints
 
         app.MapPost("/api/player/auth/login", async (
             [FromBody] PlayerLoginRequest req,
-            AppDbContext db) =>
+            AppDbContext db,
+            PasswordService passwords) =>
         {
             var player = await db.Players
                 .FirstOrDefaultAsync(p => p.Nickname == req.Nickname);
 
-            if (player is null || player.Password != req.Password)
-            {
+            if (player is null)
                 return Results.Unauthorized();
-            }
+
+            var check = passwords.Check(player.PasswordHash, player.Password, req.Password);
+            if (!PasswordService.IsSuccess(check))
+                return Results.Unauthorized();
+
+            // Düz metinden ya da eski hash'ten geldiyse hash'i güncelle (PR-13); aşağıdaki SaveChanges yazar
+            if (check == PasswordCheckResult.SucceededNeedsUpgrade)
+                player.PasswordHash = passwords.Hash(req.Password);
 
             // İstersen burada LastLogin güncellemesi de yapabilirsin
             player.LastLogin = DateTime.UtcNow;
@@ -137,7 +157,8 @@ public static class AuthEndpoints
 
         app.MapPost("/api/player/auth/register", async (
     [FromBody] PlayerRegisterRequest req,
-    AppDbContext db) =>
+    AppDbContext db,
+    PasswordService passwords) =>
 {
     if (string.IsNullOrWhiteSpace(req.Nickname) ||
         string.IsNullOrWhiteSpace(req.Name) ||
@@ -173,7 +194,7 @@ public static class AuthEndpoints
         Nickname = req.Nickname,
         Name = req.Name,
         Email = email,
-        Password = req.Password,
+        PasswordHash = passwords.Hash(req.Password),
         BirthDate = req.BirthDate,
         CreatedAt = now,
         UpdatedAt = now,

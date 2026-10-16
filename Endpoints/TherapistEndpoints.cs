@@ -57,7 +57,7 @@ public static class TherapistEndpoints
         .WithName("UpdateTherapist");
 
         // PUT: şifre değiştir
-        app.MapPut("/api/therapists/{id:int}/password", async (int id, [FromBody] ChangePasswordRequest req, AppDbContext db) =>
+        app.MapPut("/api/therapists/{id:int}/password", async (int id, [FromBody] ChangePasswordRequest req, AppDbContext db, PasswordService passwords) =>
         {
             if (string.IsNullOrEmpty(req.OldPassword) || string.IsNullOrEmpty(req.NewPassword))
                 return Results.BadRequest(new { message = "Eski ve yeni şifre zorunlu." });
@@ -69,11 +69,12 @@ public static class TherapistEndpoints
             if (therapist is null)
                 return Results.NotFound();
 
-            // TODO: Auth endpoint'leri hash'e geçtiğinde burada da hash karşılaştırma yapılmalı.
-            if (therapist.Password != req.OldPassword)
+            if (!PasswordService.IsSuccess(passwords.Check(therapist.PasswordHash, therapist.Password, req.OldPassword)))
                 return Results.BadRequest(new { message = "Eski şifre hatalı." });
 
-            therapist.Password = req.NewPassword;
+            // Yeni şifre yalnızca hash olarak; eski düz metin artık geçersiz (PR-13)
+            therapist.PasswordHash = passwords.Hash(req.NewPassword);
+            therapist.Password = null;
             therapist.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
 
