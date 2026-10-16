@@ -94,10 +94,11 @@ public static class ConnectionRequestEndpoints
                     playerName = request.Player.Name,
                 });
             }
-            catch
+            catch (Exception ex)
             {
                 await tx.RollbackAsync();
-                return Results.Json(new { error = "İşlem sırasında hata oluştu." }, statusCode: 500);
+                var errorId = ErrorLog.Log("PATCH /api/connection-requests/{id}/accept", ex);
+                return Results.Json(new { error = "İşlem sırasında hata oluştu.", errorId }, statusCode: 500);
             }
         })
         .WithTags("ConnectionRequests")
@@ -139,10 +140,11 @@ public static class ConnectionRequestEndpoints
 
                 return Results.Ok(new { message = "Reddedildi." });
             }
-            catch
+            catch (Exception ex)
             {
                 await tx.RollbackAsync();
-                return Results.Json(new { error = "İşlem sırasında hata oluştu." }, statusCode: 500);
+                var errorId = ErrorLog.Log("PATCH /api/connection-requests/{id}/reject", ex);
+                return Results.Json(new { error = "İşlem sırasında hata oluştu.", errorId }, statusCode: 500);
             }
         })
         .WithTags("ConnectionRequests")

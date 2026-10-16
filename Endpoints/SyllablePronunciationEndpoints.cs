@@ -108,9 +108,9 @@ public static class SyllablePronunciationEndpoints
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[SYLLABLE] HATA: {ex.Message}");
+                var errorId = ErrorLog.Log("POST /api/pronunciation/check-syllable", ex);
                 return Results.Json(
-                    new { message = "Whisper hatası", detail = ex.Message },
+                    new { message = "Whisper hatası", errorId },
                     statusCode: 500);
             }
         })

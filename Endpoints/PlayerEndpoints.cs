@@ -45,10 +45,10 @@ public static class PlayerEndpoints
             }
             catch (Exception ex)
             {
-                // GEÇİCİ TEŞHİS — sorun çözüldükten sonra kaldırılacak
+                var errorId = ErrorLog.Log("GET /api/students", ex);
                 return Results.Problem(
-                    title: "GET /api/students patladı",
-                    detail: $"{ex.GetType().Name}: {ex.Message}\n--- INNER ---\n{ex.InnerException?.GetType().Name}: {ex.InnerException?.Message}\n--- STACK ---\n{ex.StackTrace}",
+                    title: "Öğrenci listesi alınamadı",
+                    detail: $"Hata kodu: {errorId}",
                     statusCode: 500);
             }
         })

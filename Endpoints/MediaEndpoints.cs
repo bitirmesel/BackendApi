@@ -15,9 +15,14 @@ public static class MediaEndpoints
                 var url = await cloudinaryService.UploadImageAsync(file);
                 return Results.Ok(new { url = url });
             }
+            catch (ArgumentException ex)
+            {
+                return Results.BadRequest(new { message = ex.Message });
+            }
             catch (Exception ex)
             {
-                return Results.Problem(ex.Message);
+                var errorId = ErrorLog.Log("POST /api/media/upload", ex);
+                return Results.Problem($"Görsel yüklenemedi. Hata kodu: {errorId}");
             }
         })
         .WithTags("Media")
@@ -40,7 +45,8 @@ public static class MediaEndpoints
             }
             catch (Exception ex)
             {
-                return Results.Problem(ex.Message);
+                var errorId = ErrorLog.Log("POST /api/media/upload-audio", ex);
+                return Results.Problem($"Ses yüklenemedi. Hata kodu: {errorId}");
             }
         })
         .WithTags("Media")

@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace DktApi.Models.Db;
 
@@ -22,6 +23,8 @@ public class Player
     [MaxLength(150)]
     public string Email { get; set; } = string.Empty;
 
+    // Şifre hiçbir API yanıtında JSON'a yazılmaz (entity doğrudan dönülse bile)
+    [JsonIgnore]
     [Column("password")]
     [MaxLength(255)]
     public string Password { get; set; } = string.Empty;

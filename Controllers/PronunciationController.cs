@@ -134,8 +134,10 @@ namespace DktApi.Controllers
 
                 if (!postRes.isSuccess)
                 {
-                    return StatusCode((int)(postRes.status ?? HttpStatusCode.BadRequest),
-                        new { message = "Post Hatası", detail = postRes.body });
+                    // FluentMe'nin ham yanıtı ve durum kodu istemciye aktarılmaz (ör. FluentMe 401'i bizim 401'imiz değildir)
+                    var postErrorId = ErrorLog.Log("POST /api/pronunciation/check (FluentMe post)",
+                        new Exception($"FluentMe post status={(int?)postRes.status} body={postRes.body}"));
+                    return StatusCode(502, new { message = "Telaffuz servisine ulaşılamadı.", errorId = postErrorId });
                 }
 
                 var postId = postRes.postId!;
@@ -308,15 +310,9 @@ namespace DktApi.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new
-                {
-                    type = "PronunciationCheckError",
-                    requestId,
-                    timestampMs = NowMs(),
-                    message = ex.Message,
-                    stackTrace = ex.ToString()
-                }));
-                return StatusCode(500, new { message = "Sunucu Hatası", detail = ex.Message });
+                // Tam detay loglanır; istemciye exception / dış servis mesajı dönülmez
+                var errorId = ErrorLog.Log($"POST /api/pronunciation/check (requestId={requestId})", ex);
+                return StatusCode(500, new { message = "Sunucu Hatası", errorId });
             }
         }
 
