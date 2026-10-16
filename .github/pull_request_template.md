@@ -1,6 +1,6 @@
 ## [PR-XX] Başlık
 
-> Yol haritası: [ROADMAP.md](https://github.com/bitirmesel/GraduationProject/blob/main/ROADMAP.md) · Mimari: [ARCHITECTURE.md](https://github.com/bitirmesel/GraduationProject/blob/main/ARCHITECTURE.md)
+> Yol haritası: [ROADMAP.md](https://github.com/bitirmesel/BackendApi/blob/main/docs/ROADMAP.md) · Mimari: [ARCHITECTURE.md](https://github.com/bitirmesel/BackendApi/blob/main/docs/ARCHITECTURE.md)
 
 > ⚠️ `main`'e merge edilen her değişiklik **anında Render'a deploy edilir.** Kullanımdaki Unity ve Flutter sürümlerini kırmadığından emin ol.
 
