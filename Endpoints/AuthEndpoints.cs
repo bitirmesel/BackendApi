@@ -125,14 +125,17 @@ public static class AuthEndpoints
             AppDbContext db,
             PasswordService passwords) =>
         {
-            var player = await db.Players
-                .FirstOrDefaultAsync(p => p.Nickname == req.Nickname);
-
-            if (player is null)
+            // Kullanıcı adı harf duyarsız; aynı adı taşıyan eski kayıtlar arasından şifresi tutan seçilir
+            var nickname = PlayerLoginResolver.NormalizeNickname(req.Nickname);
+            if (nickname.Length == 0)
                 return Results.Unauthorized();
 
-            var check = passwords.Check(player.PasswordHash, player.Password, req.Password);
-            if (!PasswordService.IsSuccess(check))
+            var candidates = await db.Players
+                .Where(p => p.Nickname.ToLower() == nickname)
+                .ToListAsync();
+
+            var (player, check) = PlayerLoginResolver.Resolve(candidates, req.Password, passwords);
+            if (player is null)
                 return Results.Unauthorized();
 
             // Düz metinden ya da eski hash'ten geldiyse hash'i güncelle (PR-13); aşağıdaki SaveChanges yazar
@@ -174,7 +177,9 @@ public static class AuthEndpoints
         return Results.BadRequest(new { message = "Şifreler eşleşmiyor." });
     }
 
-    var nicknameExists = await db.Players.AnyAsync(p => p.Nickname == req.Nickname);
+    // Kullanıcı adı giriş kimliği: harf duyarsız benzersiz olmalı
+    var nicknameNorm = PlayerLoginResolver.NormalizeNickname(req.Nickname);
+    var nicknameExists = await db.Players.AnyAsync(p => p.Nickname.ToLower() == nicknameNorm);
     if (nicknameExists)
     {
         return Results.BadRequest(new { message = "Kullanıcı adı alınmış." });
@@ -191,7 +196,7 @@ public static class AuthEndpoints
 
     var player = new Player
     {
-        Nickname = req.Nickname,
+        Nickname = req.Nickname.Trim(),
         Name = req.Name,
         Email = email,
         PasswordHash = passwords.Hash(req.Password),
